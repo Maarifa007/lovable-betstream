@@ -17,16 +17,20 @@ const Index = () => {
       home: "West Ham",
       away: "Leicester",
       time: "32:15",
-      spread: "+1.5",
-      odds: "1.95"
+      market: "Total Goals",
+      spread: "2.8-3.0",
+      sellPrice: "2.8",
+      buyPrice: "3.0"
     },
     {
       id: 2,
       home: "Barcelona",
       away: "Real Madrid",
       time: "56:23",
-      spread: "-2.0",
-      odds: "2.10"
+      market: "Total Corners",
+      spread: "10.5-10.8",
+      sellPrice: "10.5",
+      buyPrice: "10.8"
     }
   ];
 
@@ -44,7 +48,7 @@ const Index = () => {
             <span className="font-medium">10,000</span>
           </div>
           <button className="bg-primary text-white px-4 py-2 rounded-full hover:bg-primary/90 transition-colors">
-            Place Bet
+            New Position
           </button>
         </div>
       </header>
@@ -80,29 +84,41 @@ const Index = () => {
         {/* Live Matches */}
         <main className="lg:col-span-9">
           <div className="glass rounded-lg p-4">
-            <h2 className="text-lg font-semibold mb-4">Live Matches</h2>
+            <h2 className="text-lg font-semibold mb-4">Live Markets</h2>
             <div className="space-y-4">
               {liveMatches.map((match) => (
                 <div
                   key={match.id}
                   className="bg-white/5 rounded-lg p-4 hover:bg-white/10 transition-colors cursor-pointer"
                 >
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-1">
-                      <div className="flex items-center space-x-2">
-                        <span className="text-primary text-sm">{match.time}</span>
-                        <span className="text-sm text-muted-foreground">Live</span>
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-1">
+                        <div className="flex items-center space-x-2">
+                          <span className="text-primary text-sm">{match.time}</span>
+                          <span className="text-sm text-muted-foreground">Live</span>
+                        </div>
+                        <h3 className="font-medium">{match.home} vs {match.away}</h3>
+                        <div className="text-sm text-muted-foreground">
+                          {match.market}
+                        </div>
                       </div>
-                      <h3 className="font-medium">{match.home} vs {match.away}</h3>
+                      <div className="text-right">
+                        <div className="text-sm text-muted-foreground mb-1">
+                          Spread
+                        </div>
+                        <div className="font-medium">{match.spread}</div>
+                      </div>
                     </div>
-                    <div className="text-right">
-                      <div className="text-sm text-muted-foreground mb-1">
-                        Spread
-                      </div>
-                      <div className="flex items-center space-x-3">
-                        <span className="font-medium">{match.spread}</span>
-                        <span className="text-primary font-medium">{match.odds}</span>
-                      </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <button className="p-3 rounded-lg bg-destructive/10 hover:bg-destructive/20 transition-colors text-destructive">
+                        <div className="text-xs mb-1">Sell at</div>
+                        <div className="font-semibold">{match.sellPrice}</div>
+                      </button>
+                      <button className="p-3 rounded-lg bg-primary/10 hover:bg-primary/20 transition-colors text-primary">
+                        <div className="text-xs mb-1">Buy at</div>
+                        <div className="font-semibold">{match.buyPrice}</div>
+                      </button>
                     </div>
                   </div>
                 </div>
