@@ -1,9 +1,23 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Trophy, ChevronRight, DollarSign } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+
+// Type definitions for our data
+interface Market {
+  id: number;
+  home: string;
+  away: string;
+  time: string;
+  market: string;
+  spread: string;
+  sellPrice: string;
+  buyPrice: string;
+}
 
 const Index = () => {
   const [selectedSport, setSelectedSport] = useState("football");
+  const [liveMatches, setLiveMatches] = useState<Market[]>([]);
 
   const sports = [
     { id: "football", name: "Football", count: 24 },
@@ -11,28 +25,78 @@ const Index = () => {
     { id: "basketball", name: "Basketball", count: 12 }
   ];
 
-  const liveMatches = [
-    {
-      id: 1,
-      home: "West Ham",
-      away: "Leicester",
-      time: "32:15",
-      market: "Total Goals",
-      spread: "2.8-3.0",
-      sellPrice: "2.8",
-      buyPrice: "3.0"
+  // Fetch initial market data
+  const { data: initialMarkets } = useQuery({
+    queryKey: ['markets', selectedSport],
+    queryFn: async () => {
+      // Replace with your API endpoint
+      const response = await fetch(`https://api.your-service.com/markets/${selectedSport}`);
+      if (!response.ok) {
+        throw new Error('Network response was not ok');
+      }
+      return response.json();
     },
-    {
-      id: 2,
-      home: "Barcelona",
-      away: "Real Madrid",
-      time: "56:23",
-      market: "Total Corners",
-      spread: "10.5-10.8",
-      sellPrice: "10.5",
-      buyPrice: "10.8"
+    // For demo, we'll use this placeholder data
+    placeholderData: [
+      {
+        id: 1,
+        home: "West Ham",
+        away: "Leicester",
+        time: "32:15",
+        market: "Total Goals",
+        spread: "2.8-3.0",
+        sellPrice: "2.8",
+        buyPrice: "3.0"
+      },
+      {
+        id: 2,
+        home: "Barcelona",
+        away: "Real Madrid",
+        time: "56:23",
+        market: "Total Corners",
+        spread: "10.5-10.8",
+        sellPrice: "10.5",
+        buyPrice: "10.8"
+      }
+    ]
+  });
+
+  useEffect(() => {
+    // Set initial markets
+    if (initialMarkets) {
+      setLiveMatches(initialMarkets);
     }
-  ];
+
+    // WebSocket connection for live updates
+    const ws = new WebSocket('wss://stream.your-service.com/markets');
+
+    ws.onmessage = (event) => {
+      const update = JSON.parse(event.data);
+      
+      setLiveMatches(current => 
+        current.map(match => {
+          if (match.id === update.id) {
+            // Flash animation classes will be added here
+            return {
+              ...match,
+              spread: `${update.sellPrice}-${update.buyPrice}`,
+              sellPrice: update.sellPrice,
+              buyPrice: update.buyPrice
+            };
+          }
+          return match;
+        })
+      );
+    };
+
+    ws.onerror = (error) => {
+      console.error('WebSocket error:', error);
+    };
+
+    return () => {
+      ws.close();
+    };
+  }, [initialMarkets]);
 
   return (
     <div className="min-h-screen bg-background text-foreground p-4 md:p-6">
@@ -111,11 +175,15 @@ const Index = () => {
                       </div>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
-                      <button className="p-3 rounded-lg bg-destructive/10 hover:bg-destructive/20 transition-colors text-destructive">
+                      <button 
+                        className="p-3 rounded-lg bg-destructive/10 hover:bg-destructive/20 transition-colors text-destructive"
+                      >
                         <div className="text-xs mb-1">Sell at</div>
                         <div className="font-semibold">{match.sellPrice}</div>
                       </button>
-                      <button className="p-3 rounded-lg bg-primary/10 hover:bg-primary/20 transition-colors text-primary">
+                      <button 
+                        className="p-3 rounded-lg bg-primary/10 hover:bg-primary/20 transition-colors text-primary"
+                      >
                         <div className="text-xs mb-1">Buy at</div>
                         <div className="font-semibold">{match.buyPrice}</div>
                       </button>
