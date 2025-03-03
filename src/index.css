@@ -50,9 +50,29 @@
     animation: gradient 4s ease infinite;
   }
 
+  .flash-up {
+    animation: flash-green 1s ease;
+  }
+
+  .flash-down {
+    animation: flash-red 1s ease;
+  }
+
   @keyframes gradient {
     0% { background-position: 0% 50%; }
     50% { background-position: 100% 50%; }
     100% { background-position: 0% 50%; }
+  }
+
+  @keyframes flash-green {
+    0% { background-color: rgba(16, 185, 129, 0); }
+    20% { background-color: rgba(16, 185, 129, 0.4); }
+    100% { background-color: rgba(16, 185, 129, 0); }
+  }
+
+  @keyframes flash-red {
+    0% { background-color: rgba(239, 68, 68, 0); }
+    20% { background-color: rgba(239, 68, 68, 0.4); }
+    100% { background-color: rgba(239, 68, 68, 0); }
   }
 }
