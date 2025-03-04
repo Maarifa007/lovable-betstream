@@ -76,7 +76,7 @@ const BetHistory = () => {
             
             return {
               ...bet,
-              status: 'settled',
+              status: 'settled' as const,  // Type assertion to fix the issue
               finalResult,
               profitLoss
             };
@@ -85,7 +85,7 @@ const BetHistory = () => {
         });
         
         localStorage.setItem('userBets', JSON.stringify(newBets));
-        setBets(newBets);
+        setBets(newBets as Bet[]); // Type assertion to ensure correct type
       }
     }, 5000); // Check every 5 seconds
 
@@ -107,7 +107,7 @@ const BetHistory = () => {
         
         return {
           ...bet,
-          status: 'settled',
+          status: 'settled' as const,  // Type assertion to fix the issue
           finalResult,
           profitLoss
         };
@@ -116,7 +116,7 @@ const BetHistory = () => {
     });
     
     localStorage.setItem('userBets', JSON.stringify(updatedBets));
-    setBets(updatedBets);
+    setBets(updatedBets as Bet[]); // Type assertion to ensure correct type
   };
 
   if (loading) {
