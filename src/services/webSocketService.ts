@@ -1,3 +1,4 @@
+
 // Websocket service with reconnection logic
 class WebSocketService {
   private socket: WebSocket | null = null;
@@ -46,6 +47,15 @@ class WebSocketService {
           this.walletHandlers.forEach(handler => handler({
             wallet: data.wallet,
             balance: data.balance
+          }));
+          return;
+        }
+        
+        // Check if this is a points update from our custom server
+        if (data.wallet && data.points !== undefined) {
+          this.walletHandlers.forEach(handler => handler({
+            wallet: data.wallet,
+            balance: data.points
           }));
           return;
         }
@@ -103,6 +113,15 @@ class WebSocketService {
       this.socket.close();
       this.socket = null;
     }
+  }
+
+  // New method to simulate a balance update (since we don't have a real backend)
+  simulateBalanceUpdate(wallet: string, newBalance: number) {
+    console.log(`Simulating balance update for wallet ${wallet}: ${newBalance}`);
+    this.walletHandlers.forEach(handler => handler({
+      wallet,
+      balance: newBalance
+    }));
   }
 }
 

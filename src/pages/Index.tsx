@@ -21,7 +21,7 @@ interface Market {
   updatedFields?: string[];
 }
 
-// Placeholder for user wallet
+// User wallet address for wallet updates
 const USER_WALLET_ADDRESS = "0x1234...5678"; // This would be from authentication in a real app
 
 const Index = () => {
@@ -43,6 +43,15 @@ const Index = () => {
     setTimeout(() => {
       element.classList.remove(className);
     }, 1000);
+  };
+
+  // Handler for balance updates
+  const handleBalanceUpdate = (newBalance: number) => {
+    setWalletBalance(newBalance);
+    toast({
+      title: "Balance Updated",
+      description: `Your balance is now $${newBalance.toLocaleString()}`
+    });
   };
 
   // Fetch initial market data
@@ -147,17 +156,7 @@ const Index = () => {
         }
       });
       
-      // Handle wallet balance updates
-      wsRef.current.addWalletHandler((data) => {
-        if (data.wallet === USER_WALLET_ADDRESS) {
-          setWalletBalance(data.balance);
-          toast({
-            title: "Balance Updated",
-            description: `Your balance is now $${data.balance.toLocaleString()}`
-          });
-        }
-      });
-      
+      // Initialize WebSocket connection
       wsRef.current.connect();
     }
 
@@ -183,6 +182,9 @@ const Index = () => {
         walletBalance={walletBalance}
         onOpenWalletModal={() => setIsWalletModalOpen(true)}
         onOpenNewPositionModal={() => setIsNewPositionModalOpen(true)}
+        userWallet={USER_WALLET_ADDRESS}
+        webSocketService={wsRef.current}
+        onBalanceUpdate={handleBalanceUpdate}
       />
 
       {/* Main Content */}
@@ -209,6 +211,8 @@ const Index = () => {
         isOpen={isWalletModalOpen} 
         onClose={() => setIsWalletModalOpen(false)} 
         balance={walletBalance}
+        userWallet={USER_WALLET_ADDRESS}
+        webSocketService={wsRef.current}
       />
       
       <NewPositionModal 

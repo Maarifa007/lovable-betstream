@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from "react";
 import { Wallet, Plus, ArrowRight, ExternalLink } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import WebSocketService from "@/services/webSocketService";
 
 // Define the Transak SDK interface
 interface TransakSDK {
@@ -19,9 +20,11 @@ interface WalletModalProps {
   isOpen: boolean;
   onClose: () => void;
   balance: number;
+  userWallet: string;
+  webSocketService?: WebSocketService;
 }
 
-const WalletModal = ({ isOpen, onClose, balance }: WalletModalProps) => {
+const WalletModal = ({ isOpen, onClose, balance, userWallet, webSocketService }: WalletModalProps) => {
   const [isTransakOpen, setIsTransakOpen] = useState(false);
   const [isTransakLoaded, setIsTransakLoaded] = useState(false);
 
@@ -38,7 +41,9 @@ const WalletModal = ({ isOpen, onClose, balance }: WalletModalProps) => {
     document.body.appendChild(script);
 
     return () => {
-      document.body.removeChild(script);
+      if (document.body.contains(script)) {
+        document.body.removeChild(script);
+      }
     };
   }, [isOpen, isTransakLoaded]);
 
@@ -59,7 +64,7 @@ const WalletModal = ({ isOpen, onClose, balance }: WalletModalProps) => {
       apiKey: 'f7d6a82b-e8de-45b9-8e99-1041c22e93b8', // This is a example public API key
       environment: 'STAGING', // STAGING/PRODUCTION
       defaultCryptoCurrency: 'USDC',
-      walletAddress: '', // Your customer's wallet address
+      walletAddress: userWallet, // Your customer's wallet address
       themeColor: '000000', // App theme color
       fiatCurrency: 'USD', // INR/GBP
       email: '', // Your customer's email address
@@ -72,15 +77,42 @@ const WalletModal = ({ isOpen, onClose, balance }: WalletModalProps) => {
       },
       onSuccess: (data: any) => {
         console.log("Transaction Successful:", data);
+        
+        // Simulate balance update since we don't have a real backend
+        if (webSocketService) {
+          // For demo purposes, add the deposit amount to current balance
+          // In a real app, this would come from the server
+          const depositAmount = data.fiatAmount || 100; // Default to 100 if not available
+          const newBalance = balance + depositAmount;
+          
+          webSocketService.simulateBalanceUpdate(userWallet, newBalance);
+        }
+        
         toast({
           title: "Deposit successful!",
-          description: "Your wallet balance will update shortly."
+          description: "Your wallet balance has been updated."
         });
+        
         setIsTransakOpen(false);
       }
     });
 
     transak.init();
+  };
+
+  // Function to simulate quick balance updates for testing
+  const simulateQuickDeposit = () => {
+    if (webSocketService) {
+      const depositAmount = 50; // Add $50 to the balance
+      const newBalance = balance + depositAmount;
+      
+      webSocketService.simulateBalanceUpdate(userWallet, newBalance);
+      
+      toast({
+        title: "Quick Deposit Successful!",
+        description: `$${depositAmount} added to your balance for testing.`
+      });
+    }
   };
 
   if (!isOpen) return null;
@@ -123,6 +155,15 @@ const WalletModal = ({ isOpen, onClose, balance }: WalletModalProps) => {
               Withdraw
             </button>
           </div>
+
+          {/* Quick deposit button for testing */}
+          <button 
+            onClick={simulateQuickDeposit}
+            className="w-full flex items-center justify-center gap-2 p-3 rounded-lg bg-green-500/20 hover:bg-green-500/30 text-green-500 transition-colors"
+          >
+            <Plus size={16} />
+            Quick Deposit (Test)
+          </button>
 
           {isTransakOpen && (
             <div className="mt-4 p-3 border border-primary/30 rounded-lg bg-primary/5 text-sm flex items-start gap-2">

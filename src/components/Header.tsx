@@ -1,14 +1,26 @@
 
 import { Trophy, DollarSign } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import LiveBalance from "./LiveBalance";
+import WebSocketService from "@/services/webSocketService";
 
 interface HeaderProps {
   walletBalance: number;
   onOpenWalletModal: () => void;
   onOpenNewPositionModal?: () => void;
+  userWallet: string;
+  webSocketService?: WebSocketService;
+  onBalanceUpdate?: (newBalance: number) => void;
 }
 
-const Header = ({ walletBalance, onOpenWalletModal, onOpenNewPositionModal }: HeaderProps) => {
+const Header = ({ 
+  walletBalance, 
+  onOpenWalletModal, 
+  onOpenNewPositionModal,
+  userWallet,
+  webSocketService,
+  onBalanceUpdate 
+}: HeaderProps) => {
   const handleNewPosition = () => {
     if (onOpenNewPositionModal) {
       onOpenNewPositionModal();
@@ -29,7 +41,18 @@ const Header = ({ walletBalance, onOpenWalletModal, onOpenNewPositionModal }: He
           className="glass px-4 py-2 rounded-full flex items-center space-x-2 hover:bg-white/10 transition-colors"
         >
           <DollarSign className="w-4 h-4 text-primary" />
-          <span className="font-medium">{walletBalance.toLocaleString()}</span>
+          <span className="font-medium">
+            {webSocketService && onBalanceUpdate ? (
+              <LiveBalance 
+                userWallet={userWallet}
+                initialBalance={walletBalance}
+                webSocketService={webSocketService}
+                onBalanceUpdate={onBalanceUpdate}
+              />
+            ) : (
+              walletBalance.toLocaleString()
+            )}
+          </span>
         </button>
         <button 
           onClick={handleNewPosition}
