@@ -5,9 +5,18 @@ import { toast } from "@/hooks/use-toast";
 interface HeaderProps {
   walletBalance: number;
   onOpenWalletModal: () => void;
+  onOpenNewPositionModal?: () => void;
 }
 
-const Header = ({ walletBalance, onOpenWalletModal }: HeaderProps) => {
+const Header = ({ walletBalance, onOpenWalletModal, onOpenNewPositionModal }: HeaderProps) => {
+  const handleNewPosition = () => {
+    if (onOpenNewPositionModal) {
+      onOpenNewPositionModal();
+    } else {
+      toast({ title: "Coming soon!", description: "This feature is under development." });
+    }
+  };
+
   return (
     <header className="glass rounded-lg p-4 mb-6 flex items-center justify-between">
       <div className="flex items-center space-x-2">
@@ -23,7 +32,7 @@ const Header = ({ walletBalance, onOpenWalletModal }: HeaderProps) => {
           <span className="font-medium">{walletBalance.toLocaleString()}</span>
         </button>
         <button 
-          onClick={() => toast({ title: "Coming soon!", description: "This feature is under development." })}
+          onClick={handleNewPosition}
           className="bg-primary text-white px-4 py-2 rounded-full hover:bg-primary/90 transition-colors"
         >
           New Position

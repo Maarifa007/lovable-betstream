@@ -1,7 +1,19 @@
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Wallet, Plus, ArrowRight, ExternalLink } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+
+// Define the Transak SDK interface
+interface TransakSDK {
+  init: () => void;
+  close: () => void;
+}
+
+declare global {
+  interface Window {
+    TransakSDK: new (config: any) => TransakSDK;
+  }
+}
 
 interface WalletModalProps {
   isOpen: boolean;
@@ -11,15 +23,64 @@ interface WalletModalProps {
 
 const WalletModal = ({ isOpen, onClose, balance }: WalletModalProps) => {
   const [isTransakOpen, setIsTransakOpen] = useState(false);
+  const [isTransakLoaded, setIsTransakLoaded] = useState(false);
 
+  // Load Transak SDK script
+  useEffect(() => {
+    if (!isOpen || isTransakLoaded) return;
+
+    const script = document.createElement('script');
+    script.src = 'https://global.transak.com/sdk/v1.1/widget.js';
+    script.async = true;
+    script.onload = () => {
+      setIsTransakLoaded(true);
+    };
+    document.body.appendChild(script);
+
+    return () => {
+      document.body.removeChild(script);
+    };
+  }, [isOpen, isTransakLoaded]);
+
+  // Initialize Transak when deposit button is clicked
   const handleDeposit = () => {
+    if (!isTransakLoaded) {
+      toast({
+        title: "Transak is loading",
+        description: "Please wait a moment and try again."
+      });
+      return;
+    }
+
     setIsTransakOpen(true);
-    // Initialize Transak in a real implementation
-    window.open('https://global.transak.com/', '_blank');
-    toast({
-      title: "Transak opened",
-      description: "Complete your deposit in the Transak window",
+
+    // Initialize Transak with configuration
+    const transak = new window.TransakSDK({
+      apiKey: 'f7d6a82b-e8de-45b9-8e99-1041c22e93b8', // This is a example public API key
+      environment: 'STAGING', // STAGING/PRODUCTION
+      defaultCryptoCurrency: 'USDC',
+      walletAddress: '', // Your customer's wallet address
+      themeColor: '000000', // App theme color
+      fiatCurrency: 'USD', // INR/GBP
+      email: '', // Your customer's email address
+      redirectURL: '',
+      hostURL: window.location.origin,
+      widgetHeight: '550px',
+      widgetWidth: '450px',
+      onClose: () => {
+        setIsTransakOpen(false);
+      },
+      onSuccess: (data: any) => {
+        console.log("Transaction Successful:", data);
+        toast({
+          title: "Deposit successful!",
+          description: "Your wallet balance will update shortly."
+        });
+        setIsTransakOpen(false);
+      }
     });
+
+    transak.init();
   };
 
   if (!isOpen) return null;

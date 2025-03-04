@@ -1,12 +1,12 @@
-
 import { useState, useEffect, useRef } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import WebSocketService from "@/services/webSocketService";
 import WalletModal from "@/components/WalletModal";
 import NewPositionModal from "@/components/NewPositionModal";
 import Header from "@/components/Header";
 import SportsNavigation from "@/components/SportsNavigation";
 import MatchList from "@/components/MatchList";
+import { toast } from "@/hooks/use-toast";
 
 // Type definitions for our data
 interface Market {
@@ -21,6 +21,9 @@ interface Market {
   updatedFields?: string[];
 }
 
+// Placeholder for user wallet
+const USER_WALLET_ADDRESS = "0x1234...5678"; // This would be from authentication in a real app
+
 const Index = () => {
   const [selectedSport, setSelectedSport] = useState("football");
   const [liveMatches, setLiveMatches] = useState<Market[]>([]);
@@ -32,6 +35,15 @@ const Index = () => {
   
   const wsRef = useRef<WebSocketService | null>(null);
   const priceRefs = useRef<Record<string, HTMLDivElement>>({});
+  const queryClient = useQueryClient();
+
+  // Animation utility
+  const animateValue = (element: HTMLElement, className: string) => {
+    element.classList.add(className);
+    setTimeout(() => {
+      element.classList.remove(className);
+    }, 1000);
+  };
 
   // Fetch initial market data
   const { data: initialMarkets, isLoading, error } = useQuery({
@@ -73,14 +85,6 @@ const Index = () => {
     }
   });
 
-  // Animation utility
-  const animateValue = (element: HTMLElement, className: string) => {
-    element.classList.add(className);
-    setTimeout(() => {
-      element.classList.remove(className);
-    }, 1000);
-  };
-
   useEffect(() => {
     // Set initial markets
     if (initialMarkets) {
@@ -91,12 +95,16 @@ const Index = () => {
     if (!wsRef.current) {
       wsRef.current = new WebSocketService('wss://stream.your-service.com/markets');
       
+      // Handle market updates
       wsRef.current.addMessageHandler((event) => {
         try {
           const update = JSON.parse(event.data);
           
-          setLiveMatches(current => 
-            current.map(match => {
+          // Optimize by using React Query's setQueryData
+          queryClient.setQueryData(['markets', selectedSport], (oldData: any) => {
+            if (!oldData) return oldData;
+            
+            return oldData.map((match: Market) => {
               if (match.id === update.id) {
                 // Track which fields were updated for animations
                 const updatedFields = [];
@@ -129,10 +137,24 @@ const Index = () => {
                 };
               }
               return match;
-            })
-          );
+            });
+          });
+          
+          // Update the state to reflect changes from query client
+          setLiveMatches(queryClient.getQueryData(['markets', selectedSport]) as Market[]);
         } catch (error) {
           console.error('Error parsing WebSocket message:', error);
+        }
+      });
+      
+      // Handle wallet balance updates
+      wsRef.current.addWalletHandler((data) => {
+        if (data.wallet === USER_WALLET_ADDRESS) {
+          setWalletBalance(data.balance);
+          toast({
+            title: "Balance Updated",
+            description: `Your balance is now $${data.balance.toLocaleString()}`
+          });
         }
       });
       
@@ -146,7 +168,7 @@ const Index = () => {
         wsRef.current = null;
       }
     };
-  }, [initialMarkets]);
+  }, [initialMarkets, queryClient, selectedSport]);
 
   const handleOpenNewPosition = (match: Market, action: 'buy' | 'sell') => {
     setSelectedMatch(match);
@@ -160,6 +182,7 @@ const Index = () => {
       <Header 
         walletBalance={walletBalance}
         onOpenWalletModal={() => setIsWalletModalOpen(true)}
+        onOpenNewPositionModal={() => setIsNewPositionModalOpen(true)}
       />
 
       {/* Main Content */}

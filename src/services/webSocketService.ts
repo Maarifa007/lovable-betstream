@@ -1,4 +1,3 @@
-
 // Websocket service with reconnection logic
 class WebSocketService {
   private socket: WebSocket | null = null;
@@ -7,6 +6,7 @@ class WebSocketService {
   private maxReconnectAttempts = 5;
   private reconnectTimeout = 1000; // Start with 1 second
   private messageHandlers: ((event: MessageEvent) => void)[] = [];
+  private walletHandlers: ((data: { wallet: string, balance: number }) => void)[] = [];
   
   constructor(url: string) {
     this.url = url;
@@ -38,7 +38,24 @@ class WebSocketService {
     };
     
     this.socket.onmessage = (event) => {
-      this.messageHandlers.forEach(handler => handler(event));
+      try {
+        const data = JSON.parse(event.data);
+        
+        // Check if this is a wallet balance update
+        if (data.type === 'wallet_update' && data.wallet && data.balance !== undefined) {
+          this.walletHandlers.forEach(handler => handler({
+            wallet: data.wallet,
+            balance: data.balance
+          }));
+          return;
+        }
+        
+        // Otherwise, treat as regular market update
+        this.messageHandlers.forEach(handler => handler(event));
+      } catch (error) {
+        // If can't parse as JSON, pass the raw event to message handlers
+        this.messageHandlers.forEach(handler => handler(event));
+      }
     };
   }
   
@@ -63,6 +80,14 @@ class WebSocketService {
   
   removeMessageHandler(handler: (event: MessageEvent) => void) {
     this.messageHandlers = this.messageHandlers.filter(h => h !== handler);
+  }
+  
+  addWalletHandler(handler: (data: { wallet: string, balance: number }) => void) {
+    this.walletHandlers.push(handler);
+  }
+  
+  removeWalletHandler(handler: (data: { wallet: string, balance: number }) => void) {
+    this.walletHandlers = this.walletHandlers.filter(h => h !== handler);
   }
   
   send(data: string | ArrayBufferLike | Blob | ArrayBufferView) {
