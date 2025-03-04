@@ -30,7 +30,7 @@ const MatchItem = ({ match, onOpenNewPosition, priceRefs }: MatchItemProps) => {
           <div className="space-y-1">
             <div className="flex items-center space-x-2">
               <span className="text-primary text-sm">{match.time}</span>
-              <span className="text-sm text-muted-foreground">Live</span>
+              <span className="text-sm text-muted-foreground bg-white/10 px-2 py-0.5 rounded-full text-xs">Live</span>
             </div>
             <h3 className="font-medium">{match.home} vs {match.away}</h3>
             <div className="text-sm text-muted-foreground">

@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from "react";
-import { Wallet, Plus, ArrowRight, ExternalLink } from "lucide-react";
+import { Wallet, Plus, ArrowRight, ExternalLink, DollarSign, Loader } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import WebSocketService from "@/services/webSocketService";
 
@@ -27,6 +27,17 @@ interface WalletModalProps {
 const WalletModal = ({ isOpen, onClose, balance, userWallet, webSocketService }: WalletModalProps) => {
   const [isTransakOpen, setIsTransakOpen] = useState(false);
   const [isTransakLoaded, setIsTransakLoaded] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Simulate loading
+  useEffect(() => {
+    if (isOpen) {
+      setIsLoading(true);
+      // Simulate API call delay
+      const timer = setTimeout(() => setIsLoading(false), 800);
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen]);
 
   // Load Transak SDK script
   useEffect(() => {
@@ -48,7 +59,7 @@ const WalletModal = ({ isOpen, onClose, balance, userWallet, webSocketService }:
   }, [isOpen, isTransakLoaded]);
 
   // Initialize Transak when deposit button is clicked
-  const handleDeposit = () => {
+  const handleDeposit = (amount?: number) => {
     if (!isTransakLoaded) {
       toast({
         title: "Transak is loading",
@@ -68,6 +79,7 @@ const WalletModal = ({ isOpen, onClose, balance, userWallet, webSocketService }:
       themeColor: '000000', // App theme color
       fiatCurrency: 'USD', // INR/GBP
       email: '', // Your customer's email address
+      fiatAmount: amount || 100, // Default amount or user selected amount
       redirectURL: '',
       hostURL: window.location.origin,
       widgetHeight: '550px',
@@ -101,16 +113,15 @@ const WalletModal = ({ isOpen, onClose, balance, userWallet, webSocketService }:
   };
 
   // Function to simulate quick balance updates for testing
-  const simulateQuickDeposit = () => {
+  const simulateQuickDeposit = (amount: number) => {
     if (webSocketService) {
-      const depositAmount = 50; // Add $50 to the balance
-      const newBalance = balance + depositAmount;
+      const newBalance = balance + amount;
       
       webSocketService.simulateBalanceUpdate(userWallet, newBalance);
       
       toast({
         title: "Quick Deposit Successful!",
-        description: `$${depositAmount} added to your balance for testing.`
+        description: `$${amount} added to your balance for testing.`
       });
     }
   };
@@ -136,48 +147,64 @@ const WalletModal = ({ isOpen, onClose, balance, userWallet, webSocketService }:
           </button>
         </div>
 
-        <div className="space-y-6">
-          <div className="p-4 border border-white/10 rounded-lg bg-white/5">
-            <div className="text-sm text-muted-foreground mb-1">Available Balance</div>
-            <div className="text-2xl font-bold">${balance.toLocaleString()}</div>
+        {isLoading ? (
+          <div className="flex flex-col items-center justify-center py-10">
+            <Loader className="h-10 w-10 text-primary animate-spin mb-4" />
+            <p className="text-muted-foreground">Loading wallet information...</p>
           </div>
-          
-          <div className="grid grid-cols-2 gap-4">
-            <button 
-              onClick={handleDeposit}
-              className="flex items-center justify-center gap-2 p-3 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
-            >
-              <Plus size={16} />
-              Deposit
-            </button>
-            <button className="flex items-center justify-center gap-2 p-3 rounded-lg bg-white/10 hover:bg-white/20 transition-colors">
-              <ArrowRight size={16} />
-              Withdraw
-            </button>
-          </div>
-
-          {/* Quick deposit button for testing */}
-          <button 
-            onClick={simulateQuickDeposit}
-            className="w-full flex items-center justify-center gap-2 p-3 rounded-lg bg-green-500/20 hover:bg-green-500/30 text-green-500 transition-colors"
-          >
-            <Plus size={16} />
-            Quick Deposit (Test)
-          </button>
-
-          {isTransakOpen && (
-            <div className="mt-4 p-3 border border-primary/30 rounded-lg bg-primary/5 text-sm flex items-start gap-2">
-              <ExternalLink size={16} className="mt-0.5 flex-shrink-0 text-primary" />
-              <p>
-                Complete your transaction in the Transak window. Your balance will update automatically once the transaction is complete.
-              </p>
+        ) : (
+          <div className="space-y-6">
+            <div className="p-4 border border-white/10 rounded-lg bg-white/5">
+              <div className="text-sm text-muted-foreground mb-1">Available Balance</div>
+              <div className="text-2xl font-bold flex items-center">
+                <DollarSign className="h-6 w-6 text-primary mr-1" />
+                {balance.toLocaleString()}
+              </div>
             </div>
-          )}
-          
-          <div className="text-xs text-muted-foreground text-center mt-4">
-            Powered by Transak - Secure, Compliant Crypto On-ramp
+            
+            <div>
+              <h3 className="text-sm font-medium text-muted-foreground mb-3">Quick Deposit</h3>
+              <div className="grid grid-cols-3 gap-3">
+                {[10, 50, 100].map((amount) => (
+                  <button
+                    key={amount}
+                    onClick={() => simulateQuickDeposit(amount)}
+                    className="bg-primary/10 hover:bg-primary/20 text-primary rounded-lg py-2 px-1 text-center transition-colors"
+                  >
+                    +${amount}
+                  </button>
+                ))}
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <button 
+                onClick={() => handleDeposit()}
+                className="flex items-center justify-center gap-2 p-3 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+              >
+                <Plus size={16} />
+                Deposit
+              </button>
+              <button className="flex items-center justify-center gap-2 p-3 rounded-lg bg-white/10 hover:bg-white/20 transition-colors">
+                <ArrowRight size={16} />
+                Withdraw
+              </button>
+            </div>
+
+            {isTransakOpen && (
+              <div className="mt-4 p-3 border border-primary/30 rounded-lg bg-primary/5 text-sm flex items-start gap-2">
+                <ExternalLink size={16} className="mt-0.5 flex-shrink-0 text-primary" />
+                <p>
+                  Complete your transaction in the Transak window. Your balance will update automatically once the transaction is complete.
+                </p>
+              </div>
+            )}
+            
+            <div className="text-xs text-muted-foreground text-center mt-4">
+              Powered by Transak - Secure, Compliant Crypto On-ramp
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );
