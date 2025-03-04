@@ -6,6 +6,7 @@ import NewPositionModal from "@/components/NewPositionModal";
 import Header from "@/components/Header";
 import SportsNavigation from "@/components/SportsNavigation";
 import MatchList from "@/components/MatchList";
+import BetHistory from "@/components/BetHistory";
 import { toast } from "@/hooks/use-toast";
 
 // Type definitions for our data
@@ -195,15 +196,21 @@ const Index = () => {
           onSelectSport={setSelectedSport}
         />
 
-        {/* Live Matches */}
-        <MatchList 
-          matches={liveMatches}
-          isLoading={isLoading}
-          error={error}
-          selectedSport={selectedSport}
-          priceRefs={priceRefs}
-          onOpenNewPosition={handleOpenNewPosition}
-        />
+        {/* Live Matches and Bet History */}
+        <div className="lg:col-span-9 space-y-6">
+          {/* Live Matches */}
+          <MatchList 
+            matches={liveMatches}
+            isLoading={isLoading}
+            error={error}
+            selectedSport={selectedSport}
+            priceRefs={priceRefs}
+            onOpenNewPosition={handleOpenNewPosition}
+          />
+          
+          {/* Bet History */}
+          <BetHistory />
+        </div>
       </div>
       
       {/* Modals */}

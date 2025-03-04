@@ -16,8 +16,20 @@ interface NewPositionModalProps {
   action?: 'buy' | 'sell';
 }
 
+interface Bet {
+  id: string;
+  matchId: number;
+  market: string;
+  betType: 'buy' | 'sell';
+  betPrice: number;
+  stakePerPoint: number;
+  status: 'open' | 'settled';
+  timestamp: number;
+}
+
 const NewPositionModal = ({ isOpen, onClose, match, action }: NewPositionModalProps) => {
   const [stake, setStake] = useState<number>(100);
+  const [stakePerPoint, setStakePerPoint] = useState<number>(10);
   const [stopLoss, setStopLoss] = useState<number | null>(null);
 
   if (!isOpen || !match) return null;
@@ -30,10 +42,26 @@ const NewPositionModal = ({ isOpen, onClose, match, action }: NewPositionModalPr
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    // In real implementation, this would send the order to a backend
+    // Create a bet object
+    const bet: Bet = {
+      id: `bet-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      matchId: match.id,
+      market: match.market,
+      betType: action || 'buy',
+      betPrice: parseFloat(price),
+      stakePerPoint,
+      status: 'open',
+      timestamp: Date.now(),
+    };
+    
+    // Store bet in localStorage for now (in a real app, this would be sent to a backend)
+    const existingBets = JSON.parse(localStorage.getItem('userBets') || '[]');
+    localStorage.setItem('userBets', JSON.stringify([...existingBets, bet]));
+    
+    // Show toast notification
     toast({
       title: "Position Opened",
-      description: `${action === 'buy' ? 'Bought' : 'Sold'} ${match.market} at ${price} with $${stake} stake`,
+      description: `${action === 'buy' ? 'Bought' : 'Sold'} ${match.market} at ${price} with $${stakePerPoint} per point`,
     });
     
     onClose();
@@ -71,9 +99,23 @@ const NewPositionModal = ({ isOpen, onClose, match, action }: NewPositionModalPr
             </div>
             
             <div className="space-y-2">
-              <label className="text-sm" htmlFor="stake">Stake Amount ($)</label>
+              <label className="text-sm" htmlFor="stakePerPoint">Stake Per Point ($)</label>
               <input
-                id="stake"
+                id="stakePerPoint"
+                type="number"
+                value={stakePerPoint}
+                onChange={(e) => setStakePerPoint(Number(e.target.value))}
+                min={1}
+                max={1000}
+                className="w-full bg-white/10 border border-white/20 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+              <p className="text-xs text-muted-foreground">Amount you win or lose per point difference</p>
+            </div>
+            
+            <div className="space-y-2">
+              <label className="text-sm" htmlFor="totalStake">Total Stake Amount ($)</label>
+              <input
+                id="totalStake"
                 type="number"
                 value={stake}
                 onChange={(e) => setStake(Number(e.target.value))}

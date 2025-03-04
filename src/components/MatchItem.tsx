@@ -42,6 +42,9 @@ const MatchItem = ({ match, onOpenNewPosition, priceRefs }: MatchItemProps) => {
               Spread
             </div>
             <div className="font-medium">{match.spread}</div>
+            <div className="text-xs text-muted-foreground mt-1">
+              Win/lose per point difference
+            </div>
           </div>
         </div>
         <div className="grid grid-cols-2 gap-4">
@@ -56,6 +59,9 @@ const MatchItem = ({ match, onOpenNewPosition, priceRefs }: MatchItemProps) => {
             >
               {match.sellPrice}
             </div>
+            <div className="text-xs mt-1">
+              Win if final &lt; {match.sellPrice}
+            </div>
           </button>
           <button 
             onClick={() => onOpenNewPosition(match, 'buy')}
@@ -67,6 +73,9 @@ const MatchItem = ({ match, onOpenNewPosition, priceRefs }: MatchItemProps) => {
               className="font-semibold transition-all duration-300"
             >
               {match.buyPrice}
+            </div>
+            <div className="text-xs mt-1">
+              Win if final &gt; {match.buyPrice}
             </div>
           </button>
         </div>
