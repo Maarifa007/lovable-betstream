@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from "react";
-import { Wallet, Plus, ArrowRight, ExternalLink, DollarSign, Loader } from "lucide-react";
+import { Wallet, Plus, ArrowRight, ExternalLink, DollarSign, Loader, ShieldCheck } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import WebSocketService from "@/services/webSocketService";
 
@@ -28,6 +28,8 @@ const WalletModal = ({ isOpen, onClose, balance, userWallet, webSocketService }:
   const [isTransakOpen, setIsTransakOpen] = useState(false);
   const [isTransakLoaded, setIsTransakLoaded] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [kycVerified, setKycVerified] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
 
   // Simulate loading
   useEffect(() => {
@@ -38,6 +40,15 @@ const WalletModal = ({ isOpen, onClose, balance, userWallet, webSocketService }:
       return () => clearTimeout(timer);
     }
   }, [isOpen]);
+
+  // Check KYC status when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      // In a real app, fetch from an API. For now, we'll check localStorage
+      const kycStatus = localStorage.getItem(`kyc_${userWallet}`);
+      setKycVerified(kycStatus === 'verified');
+    }
+  }, [isOpen, userWallet]);
 
   // Load Transak SDK script
   useEffect(() => {
@@ -64,6 +75,16 @@ const WalletModal = ({ isOpen, onClose, balance, userWallet, webSocketService }:
       toast({
         title: "Transak is loading",
         description: "Please wait a moment and try again."
+      });
+      return;
+    }
+
+    // If KYC is not verified, show a toast message
+    if (!kycVerified) {
+      toast({
+        title: "KYC Required",
+        description: "You need to complete KYC verification before depositing funds.",
+        variant: "destructive"
       });
       return;
     }
@@ -112,8 +133,43 @@ const WalletModal = ({ isOpen, onClose, balance, userWallet, webSocketService }:
     transak.init();
   };
 
+  // Function to simulate KYC verification process
+  const startKycVerification = () => {
+    setIsVerifying(true);
+    
+    // In a real implementation, this would redirect to Sumsub or another KYC provider
+    // For demo purposes, we'll simulate a KYC process with a timeout
+    toast({
+      title: "KYC Verification Started",
+      description: "Please complete the verification process."
+    });
+    
+    // Simulate KYC verification process (3 seconds)
+    setTimeout(() => {
+      // Save KYC status to localStorage (in a real app, this would be saved to a database)
+      localStorage.setItem(`kyc_${userWallet}`, 'verified');
+      setKycVerified(true);
+      setIsVerifying(false);
+      
+      toast({
+        title: "KYC Verification Complete",
+        description: "Your account has been verified successfully."
+      });
+    }, 3000);
+  };
+
   // Function to simulate quick balance updates for testing
   const simulateQuickDeposit = (amount: number) => {
+    // Require KYC for deposits
+    if (!kycVerified) {
+      toast({
+        title: "KYC Required",
+        description: "You need to complete KYC verification before depositing funds.",
+        variant: "destructive"
+      });
+      return;
+    }
+    
     if (webSocketService) {
       const newBalance = balance + amount;
       
@@ -162,6 +218,38 @@ const WalletModal = ({ isOpen, onClose, balance, userWallet, webSocketService }:
               </div>
             </div>
             
+            {/* KYC Status Section */}
+            <div className="p-4 border border-white/10 rounded-lg bg-white/5">
+              <div className="text-sm text-muted-foreground mb-1">KYC Status</div>
+              {kycVerified ? (
+                <div className="flex items-center text-green-400">
+                  <ShieldCheck className="h-5 w-5 mr-2" />
+                  <span>Verified ✅</span>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center text-yellow-400">
+                    <ShieldCheck className="h-5 w-5 mr-2" />
+                    <span>Not Verified</span>
+                  </div>
+                  <button
+                    onClick={startKycVerification}
+                    disabled={isVerifying}
+                    className="mt-2 w-full flex items-center justify-center gap-2 p-2 rounded-lg bg-yellow-500 hover:bg-yellow-600 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isVerifying ? (
+                      <>
+                        <Loader className="h-4 w-4 animate-spin" />
+                        Verifying...
+                      </>
+                    ) : (
+                      <>Verify Account</>
+                    )}
+                  </button>
+                </div>
+              )}
+            </div>
+            
             <div>
               <h3 className="text-sm font-medium text-muted-foreground mb-3">Quick Deposit</h3>
               <div className="grid grid-cols-3 gap-3">
@@ -169,7 +257,12 @@ const WalletModal = ({ isOpen, onClose, balance, userWallet, webSocketService }:
                   <button
                     key={amount}
                     onClick={() => simulateQuickDeposit(amount)}
-                    className="bg-primary/10 hover:bg-primary/20 text-primary rounded-lg py-2 px-1 text-center transition-colors"
+                    className={`${
+                      kycVerified 
+                        ? "bg-primary/10 hover:bg-primary/20 text-primary" 
+                        : "bg-gray-500/10 text-gray-500 cursor-not-allowed"
+                    } rounded-lg py-2 px-1 text-center transition-colors`}
+                    disabled={!kycVerified}
                   >
                     +${amount}
                   </button>
@@ -180,12 +273,24 @@ const WalletModal = ({ isOpen, onClose, balance, userWallet, webSocketService }:
             <div className="grid grid-cols-2 gap-4">
               <button 
                 onClick={() => handleDeposit()}
-                className="flex items-center justify-center gap-2 p-3 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+                className={`flex items-center justify-center gap-2 p-3 rounded-lg ${
+                  kycVerified 
+                    ? "bg-primary text-primary-foreground hover:bg-primary/90" 
+                    : "bg-gray-500 text-gray-300 cursor-not-allowed"
+                } transition-colors`}
+                disabled={!kycVerified}
               >
                 <Plus size={16} />
                 Deposit
               </button>
-              <button className="flex items-center justify-center gap-2 p-3 rounded-lg bg-white/10 hover:bg-white/20 transition-colors">
+              <button 
+                className={`flex items-center justify-center gap-2 p-3 rounded-lg ${
+                  kycVerified 
+                    ? "bg-white/10 hover:bg-white/20" 
+                    : "bg-gray-500/10 text-gray-500 cursor-not-allowed"
+                } transition-colors`}
+                disabled={!kycVerified}
+              >
                 <ArrowRight size={16} />
                 Withdraw
               </button>
