@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from "react";
-import { Wallet, Plus, ArrowRight, ExternalLink, DollarSign, Loader, ShieldCheck } from "lucide-react";
+import { Wallet, Plus, ArrowRight, ExternalLink, DollarSign, Loader, ShieldCheck, Coins } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import WebSocketService from "@/services/webSocketService";
 
@@ -30,6 +30,12 @@ const WalletModal = ({ isOpen, onClose, balance, userWallet, webSocketService }:
   const [isLoading, setIsLoading] = useState(true);
   const [kycVerified, setKycVerified] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
+  
+  // Dual currency system
+  const [goldCoins, setGoldCoins] = useState(50000); // Free play balance
+  const [points, setPoints] = useState(balance); // Real money balance (using the existing balance prop)
+  const [lastClaimedDate, setLastClaimedDate] = useState<string | null>(null);
+  const [canClaimDaily, setCanClaimDaily] = useState(false);
 
   // Simulate loading
   useEffect(() => {
@@ -47,8 +53,33 @@ const WalletModal = ({ isOpen, onClose, balance, userWallet, webSocketService }:
       // In a real app, fetch from an API. For now, we'll check localStorage
       const kycStatus = localStorage.getItem(`kyc_${userWallet}`);
       setKycVerified(kycStatus === 'verified');
+      
+      // Load currency balances from localStorage
+      const savedGoldCoins = localStorage.getItem(`goldCoins_${userWallet}`);
+      const savedPoints = localStorage.getItem(`points_${userWallet}`);
+      const savedLastClaimedDate = localStorage.getItem(`lastClaimedDate_${userWallet}`);
+      
+      if (savedGoldCoins) {
+        setGoldCoins(parseInt(savedGoldCoins, 10));
+      }
+      
+      if (savedPoints) {
+        setPoints(parseInt(savedPoints, 10));
+      } else {
+        setPoints(balance); // Fallback to the existing balance
+      }
+      
+      if (savedLastClaimedDate) {
+        setLastClaimedDate(savedLastClaimedDate);
+        
+        // Check if user can claim daily reward
+        const today = new Date().toISOString().split('T')[0];
+        setCanClaimDaily(savedLastClaimedDate !== today);
+      } else {
+        setCanClaimDaily(true);
+      }
     }
-  }, [isOpen, userWallet]);
+  }, [isOpen, userWallet, balance]);
 
   // Load Transak SDK script
   useEffect(() => {
@@ -69,8 +100,39 @@ const WalletModal = ({ isOpen, onClose, balance, userWallet, webSocketService }:
     };
   }, [isOpen, isTransakLoaded]);
 
-  // Initialize Transak when deposit button is clicked
-  const handleDeposit = (amount?: number) => {
+  // Function to claim daily free Gold Coins
+  const claimDailyGoldCoins = () => {
+    if (!canClaimDaily) {
+      toast({
+        title: "Already Claimed",
+        description: "You've already claimed your daily Gold Coins. Come back tomorrow!",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    const dailyReward = 1000;
+    const newGoldCoins = goldCoins + dailyReward;
+    
+    // Update state
+    setGoldCoins(newGoldCoins);
+    
+    // Save to localStorage
+    const today = new Date().toISOString().split('T')[0];
+    localStorage.setItem(`goldCoins_${userWallet}`, newGoldCoins.toString());
+    localStorage.setItem(`lastClaimedDate_${userWallet}`, today);
+    
+    setLastClaimedDate(today);
+    setCanClaimDaily(false);
+    
+    toast({
+      title: "Daily Reward Claimed!",
+      description: `${dailyReward} Gold Coins have been added to your wallet.`
+    });
+  };
+
+  // Initialize Transak when deposit button is clicked (for Points)
+  const handlePointsDeposit = (amount?: number) => {
     if (!isTransakLoaded) {
       toast({
         title: "Transak is loading",
@@ -83,7 +145,7 @@ const WalletModal = ({ isOpen, onClose, balance, userWallet, webSocketService }:
     if (!kycVerified) {
       toast({
         title: "KYC Required",
-        description: "You need to complete KYC verification before depositing funds.",
+        description: "You need to complete KYC verification before depositing Points.",
         variant: "destructive"
       });
       return;
@@ -111,19 +173,22 @@ const WalletModal = ({ isOpen, onClose, balance, userWallet, webSocketService }:
       onSuccess: (data: any) => {
         console.log("Transaction Successful:", data);
         
-        // Simulate balance update since we don't have a real backend
+        // Simulate balance update for Points
+        const depositAmount = data.fiatAmount || 100; // Default to 100 if not available
+        const newPoints = points + depositAmount;
+        
+        // Update state and localStorage
+        setPoints(newPoints);
+        localStorage.setItem(`points_${userWallet}`, newPoints.toString());
+        
+        // Update the main balance through WebSocketService
         if (webSocketService) {
-          // For demo purposes, add the deposit amount to current balance
-          // In a real app, this would come from the server
-          const depositAmount = data.fiatAmount || 100; // Default to 100 if not available
-          const newBalance = balance + depositAmount;
-          
-          webSocketService.simulateBalanceUpdate(userWallet, newBalance);
+          webSocketService.simulateBalanceUpdate(userWallet, newPoints);
         }
         
         toast({
-          title: "Deposit successful!",
-          description: "Your wallet balance has been updated."
+          title: "Points Purchase Successful!",
+          description: `${depositAmount} Points have been added to your wallet.`
         });
         
         setIsTransakOpen(false);
@@ -131,6 +196,23 @@ const WalletModal = ({ isOpen, onClose, balance, userWallet, webSocketService }:
     });
 
     transak.init();
+  };
+
+  // Function to buy Gold Coins (no KYC required)
+  const buyGoldCoins = (amount: number = 10000) => {
+    // For Gold Coins, we don't need KYC verification as it's free play
+    const newGoldCoins = goldCoins + amount;
+    
+    // Update state
+    setGoldCoins(newGoldCoins);
+    
+    // Save to localStorage
+    localStorage.setItem(`goldCoins_${userWallet}`, newGoldCoins.toString());
+    
+    toast({
+      title: "Gold Coins Purchased!",
+      description: `${amount} Gold Coins have been added to your wallet.`
+    });
   };
 
   // Function to simulate KYC verification process
@@ -159,25 +241,38 @@ const WalletModal = ({ isOpen, onClose, balance, userWallet, webSocketService }:
   };
 
   // Function to simulate quick balance updates for testing
-  const simulateQuickDeposit = (amount: number) => {
-    // Require KYC for deposits
-    if (!kycVerified) {
+  const simulateQuickDeposit = (amount: number, currencyType: 'points' | 'goldCoins' = 'points') => {
+    // Require KYC for Points deposits only
+    if (currencyType === 'points' && !kycVerified) {
       toast({
         title: "KYC Required",
-        description: "You need to complete KYC verification before depositing funds.",
+        description: "You need to complete KYC verification before depositing Points.",
         variant: "destructive"
       });
       return;
     }
     
-    if (webSocketService) {
-      const newBalance = balance + amount;
+    if (currencyType === 'points') {
+      const newPoints = points + amount;
+      setPoints(newPoints);
+      localStorage.setItem(`points_${userWallet}`, newPoints.toString());
       
-      webSocketService.simulateBalanceUpdate(userWallet, newBalance);
+      if (webSocketService) {
+        webSocketService.simulateBalanceUpdate(userWallet, newPoints);
+      }
       
       toast({
-        title: "Quick Deposit Successful!",
-        description: `$${amount} added to your balance for testing.`
+        title: "Quick Points Deposit Successful!",
+        description: `${amount} Points added to your balance for testing.`
+      });
+    } else {
+      const newGoldCoins = goldCoins + amount;
+      setGoldCoins(newGoldCoins);
+      localStorage.setItem(`goldCoins_${userWallet}`, newGoldCoins.toString());
+      
+      toast({
+        title: "Quick Gold Coins Deposit Successful!",
+        description: `${amount} Gold Coins added to your balance for testing.`
       });
     }
   };
@@ -210,17 +305,51 @@ const WalletModal = ({ isOpen, onClose, balance, userWallet, webSocketService }:
           </div>
         ) : (
           <div className="space-y-6">
-            <div className="p-4 border border-white/10 rounded-lg bg-white/5">
-              <div className="text-sm text-muted-foreground mb-1">Available Balance</div>
-              <div className="text-2xl font-bold flex items-center">
-                <DollarSign className="h-6 w-6 text-primary mr-1" />
-                {balance.toLocaleString()}
+            {/* Dual Currency Display */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="p-4 border border-yellow-500/20 rounded-lg bg-yellow-500/5">
+                <div className="text-sm text-muted-foreground mb-1">Gold Coins (GC)</div>
+                <div className="text-xl font-bold flex items-center text-yellow-500">
+                  <Coins className="h-5 w-5 mr-1" />
+                  {goldCoins.toLocaleString()}
+                </div>
+                <div className="text-xs text-yellow-500/70 mt-1">Free play currency</div>
+              </div>
+              
+              <div className="p-4 border border-green-500/20 rounded-lg bg-green-500/5">
+                <div className="text-sm text-muted-foreground mb-1">Points (P)</div>
+                <div className="text-xl font-bold flex items-center text-green-400">
+                  <DollarSign className="h-5 w-5 mr-1" />
+                  {points.toLocaleString()}
+                </div>
+                <div className="text-xs text-green-400/70 mt-1">Real money betting</div>
+              </div>
+            </div>
+            
+            {/* Daily Claim Section */}
+            <div className="p-4 border border-yellow-500/20 rounded-lg bg-yellow-500/5">
+              <div className="flex justify-between items-center">
+                <div>
+                  <div className="text-sm font-medium mb-1 text-yellow-500">Daily Gold Coins</div>
+                  <div className="text-xs text-muted-foreground">Claim 1,000 Gold Coins for free</div>
+                </div>
+                <button
+                  onClick={claimDailyGoldCoins}
+                  disabled={!canClaimDaily}
+                  className={`px-4 py-2 rounded-lg text-sm transition-colors ${
+                    canClaimDaily 
+                      ? "bg-yellow-500 hover:bg-yellow-600 text-white" 
+                      : "bg-gray-700 text-gray-400 cursor-not-allowed"
+                  }`}
+                >
+                  {canClaimDaily ? "Claim Now" : "Claimed Today"}
+                </button>
               </div>
             </div>
             
             {/* KYC Status Section */}
             <div className="p-4 border border-white/10 rounded-lg bg-white/5">
-              <div className="text-sm text-muted-foreground mb-1">KYC Status</div>
+              <div className="text-sm text-muted-foreground mb-1">KYC Status (Required for Points)</div>
               {kycVerified ? (
                 <div className="flex items-center text-green-400">
                   <ShieldCheck className="h-5 w-5 mr-2" />
@@ -250,16 +379,32 @@ const WalletModal = ({ isOpen, onClose, balance, userWallet, webSocketService }:
               )}
             </div>
             
+            {/* Quick Deposit Sections */}
             <div>
-              <h3 className="text-sm font-medium text-muted-foreground mb-3">Quick Deposit</h3>
+              <h3 className="text-sm font-medium text-muted-foreground mb-3">Quick Gold Coins (Free)</h3>
+              <div className="grid grid-cols-3 gap-3">
+                {[5000, 10000, 25000].map((amount) => (
+                  <button
+                    key={`gc-${amount}`}
+                    onClick={() => simulateQuickDeposit(amount, 'goldCoins')}
+                    className="bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-500 rounded-lg py-2 px-1 text-center transition-colors"
+                  >
+                    +{(amount/1000)}k GC
+                  </button>
+                ))}
+              </div>
+            </div>
+            
+            <div>
+              <h3 className="text-sm font-medium text-muted-foreground mb-3">Quick Points Deposit</h3>
               <div className="grid grid-cols-3 gap-3">
                 {[10, 50, 100].map((amount) => (
                   <button
-                    key={amount}
-                    onClick={() => simulateQuickDeposit(amount)}
+                    key={`p-${amount}`}
+                    onClick={() => simulateQuickDeposit(amount, 'points')}
                     className={`${
                       kycVerified 
-                        ? "bg-primary/10 hover:bg-primary/20 text-primary" 
+                        ? "bg-green-500/10 hover:bg-green-500/20 text-green-400" 
                         : "bg-gray-500/10 text-gray-500 cursor-not-allowed"
                     } rounded-lg py-2 px-1 text-center transition-colors`}
                     disabled={!kycVerified}
@@ -270,29 +415,26 @@ const WalletModal = ({ isOpen, onClose, balance, userWallet, webSocketService }:
               </div>
             </div>
             
+            {/* Action Buttons */}
             <div className="grid grid-cols-2 gap-4">
               <button 
-                onClick={() => handleDeposit()}
+                onClick={() => handlePointsDeposit()}
                 className={`flex items-center justify-center gap-2 p-3 rounded-lg ${
                   kycVerified 
-                    ? "bg-primary text-primary-foreground hover:bg-primary/90" 
+                    ? "bg-green-500 text-white hover:bg-green-600" 
                     : "bg-gray-500 text-gray-300 cursor-not-allowed"
                 } transition-colors`}
                 disabled={!kycVerified}
               >
                 <Plus size={16} />
-                Deposit
+                Buy Points
               </button>
               <button 
-                className={`flex items-center justify-center gap-2 p-3 rounded-lg ${
-                  kycVerified 
-                    ? "bg-white/10 hover:bg-white/20" 
-                    : "bg-gray-500/10 text-gray-500 cursor-not-allowed"
-                } transition-colors`}
-                disabled={!kycVerified}
+                onClick={() => buyGoldCoins()}
+                className="flex items-center justify-center gap-2 p-3 rounded-lg bg-yellow-500 hover:bg-yellow-600 text-white transition-colors"
               >
-                <ArrowRight size={16} />
-                Withdraw
+                <Plus size={16} />
+                Buy Gold Coins
               </button>
             </div>
 
