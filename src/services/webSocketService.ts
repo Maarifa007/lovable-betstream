@@ -1,4 +1,3 @@
-
 // Websocket service with reconnection logic
 class WebSocketService {
   private socket: WebSocket | null = null;
@@ -8,6 +7,7 @@ class WebSocketService {
   private reconnectTimeout = 1000; // Start with 1 second
   private messageHandlers: ((event: MessageEvent) => void)[] = [];
   private walletHandlers: ((data: { wallet: string, balance: number }) => void)[] = [];
+  private withdrawalHandlers: ((data: { type: string, userId: string, amount: number, status: string }) => void)[] = [];
   
   constructor(url: string) {
     this.url = url;
@@ -100,6 +100,14 @@ class WebSocketService {
     this.walletHandlers = this.walletHandlers.filter(h => h !== handler);
   }
   
+  addWithdrawalHandler(handler: (data: { type: string, userId: string, amount: number, status: string }) => void) {
+    this.withdrawalHandlers.push(handler);
+  }
+  
+  removeWithdrawalHandler(handler: (data: { type: string, userId: string, amount: number, status: string }) => void) {
+    this.withdrawalHandlers = this.withdrawalHandlers.filter(h => h !== handler);
+  }
+  
   send(data: string | ArrayBufferLike | Blob | ArrayBufferView) {
     if (this.socket && this.socket.readyState === WebSocket.OPEN) {
       this.socket.send(data);
@@ -115,12 +123,21 @@ class WebSocketService {
     }
   }
 
-  // New method to simulate a balance update (since we don't have a real backend)
   simulateBalanceUpdate(wallet: string, newBalance: number) {
     console.log(`Simulating balance update for wallet ${wallet}: ${newBalance}`);
     this.walletHandlers.forEach(handler => handler({
       wallet,
       balance: newBalance
+    }));
+  }
+
+  simulateWithdrawalNotification(userId: string, amount: number, status: 'approved' | 'rejected') {
+    console.log(`Simulating withdrawal ${status} notification for wallet ${userId}: ${amount}`);
+    this.withdrawalHandlers.forEach(handler => handler({
+      type: 'withdrawal_update',
+      userId,
+      amount,
+      status
     }));
   }
 }
