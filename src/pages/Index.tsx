@@ -1,16 +1,18 @@
+
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import WebSocketService from "@/services/webSocketService";
 import WalletModal from "@/components/WalletModal";
 import NewPositionModal from "@/components/NewPositionModal";
 import Header from "@/components/Header";
-import SportsNavigation from "@/components/SportsNavigation";
-import MatchList from "@/components/MatchList";
 import BetHistory from "@/components/BetHistory";
 import { toast } from "@/hooks/use-toast";
 import { SpreadsProvider } from "@/contexts/SpreadsContext";
+import Sidebar from "@/components/Sidebar";
+import MarketView from "@/components/MarketView";
+import BetSlip from "@/components/BetSlip";
 
-// Type definitions for our data
+// Type definitions
 interface Market {
   id: number;
   home: string;
@@ -38,14 +40,6 @@ const Index = () => {
   const wsRef = useRef<WebSocketService | null>(null);
   const priceRefs = useRef<Record<string, HTMLDivElement>>({});
   const queryClient = useQueryClient();
-
-  // Animation utility
-  const animateValue = (element: HTMLElement, className: string) => {
-    element.classList.add(className);
-    setTimeout(() => {
-      element.classList.remove(className);
-    }, 1000);
-  };
 
   // Handler for balance updates
   const handleBalanceUpdate = (newBalance: number) => {
@@ -106,58 +100,6 @@ const Index = () => {
     if (!wsRef.current) {
       wsRef.current = new WebSocketService('wss://stream.your-service.com/markets');
       
-      // Handle market updates
-      wsRef.current.addMessageHandler((event) => {
-        try {
-          const update = JSON.parse(event.data);
-          
-          // Optimize by using React Query's setQueryData
-          queryClient.setQueryData(['markets', selectedSport], (oldData: any) => {
-            if (!oldData) return oldData;
-            
-            return oldData.map((match: Market) => {
-              if (match.id === update.id) {
-                // Track which fields were updated for animations
-                const updatedFields = [];
-                
-                if (match.sellPrice !== update.sellPrice) updatedFields.push('sellPrice');
-                if (match.buyPrice !== update.buyPrice) updatedFields.push('buyPrice');
-                
-                // Apply animations in the next render cycle
-                if (updatedFields.length > 0) {
-                  setTimeout(() => {
-                    updatedFields.forEach(field => {
-                      const element = priceRefs.current[`${match.id}-${field}`];
-                      if (element) {
-                        const direction = field === 'sellPrice' 
-                          ? parseFloat(update.sellPrice) > parseFloat(match.sellPrice) ? 'up' : 'down'
-                          : parseFloat(update.buyPrice) > parseFloat(match.buyPrice) ? 'up' : 'down';
-                        
-                        animateValue(element, `flash-${direction}`);
-                      }
-                    });
-                  }, 0);
-                }
-                
-                return {
-                  ...match,
-                  spread: `${update.sellPrice}-${update.buyPrice}`,
-                  sellPrice: update.sellPrice,
-                  buyPrice: update.buyPrice,
-                  updatedFields
-                };
-              }
-              return match;
-            });
-          });
-          
-          // Update the state to reflect changes from query client
-          setLiveMatches(queryClient.getQueryData(['markets', selectedSport]) as Market[]);
-        } catch (error) {
-          console.error('Error parsing WebSocket message:', error);
-        }
-      });
-      
       // Initialize WebSocket connection
       wsRef.current.connect();
     }
@@ -179,7 +121,7 @@ const Index = () => {
 
   return (
     <SpreadsProvider>
-      <div className="min-h-screen bg-background text-foreground p-4 md:p-6">
+      <div className="min-h-screen bg-background text-foreground overflow-hidden">
         {/* Header */}
         <Header 
           walletBalance={walletBalance}
@@ -190,29 +132,25 @@ const Index = () => {
           onBalanceUpdate={handleBalanceUpdate}
         />
 
-        {/* Main Content */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* Sports Navigation */}
-          <SportsNavigation 
+        {/* Main Content - IG Index Style */}
+        <div className="flex h-[calc(100vh-64px)]">
+          {/* Left Sidebar */}
+          <Sidebar 
             selectedSport={selectedSport}
             onSelectSport={setSelectedSport}
           />
-
-          {/* Live Matches and Bet History */}
-          <div className="lg:col-span-9 space-y-6">
-            {/* Live Matches */}
-            <MatchList 
-              matches={liveMatches}
-              isLoading={isLoading}
-              error={error}
-              selectedSport={selectedSport}
-              priceRefs={priceRefs}
-              onOpenNewPosition={handleOpenNewPosition}
-            />
-            
-            {/* Bet History */}
-            <BetHistory />
-          </div>
+          
+          {/* Main Market View */}
+          <MarketView 
+            matches={liveMatches}
+            isLoading={isLoading}
+            error={error}
+            onOpenNewPosition={handleOpenNewPosition}
+            priceRefs={priceRefs}
+          />
+          
+          {/* Right Bet Slip Panel */}
+          <BetSlip />
         </div>
         
         {/* Modals */}

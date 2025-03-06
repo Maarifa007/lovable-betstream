@@ -19,25 +19,24 @@ interface NewPositionModalProps {
 interface Bet {
   id: string;
   matchId: number;
+  matchName: string;
   market: string;
   betType: 'buy' | 'sell';
   betPrice: number;
   stakePerPoint: number;
+  makeupLimit: number;
   status: 'open' | 'settled';
   timestamp: number;
 }
 
 const NewPositionModal = ({ isOpen, onClose, match, action }: NewPositionModalProps) => {
-  const [stake, setStake] = useState<number>(100);
   const [stakePerPoint, setStakePerPoint] = useState<number>(10);
-  const [stopLoss, setStopLoss] = useState<number | null>(null);
+  const [makeupLimit, setMakeupLimit] = useState<number>(30); // Default 30X makeup
 
   if (!isOpen || !match) return null;
 
   const price = action === 'buy' ? match.buyPrice : match.sellPrice;
-  const maxLoss = action === 'buy' 
-    ? stake * (parseFloat(match.buyPrice) / 100) 
-    : stake * (parseFloat(match.sellPrice) / 100);
+  const totalExposure = stakePerPoint * makeupLimit;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -46,10 +45,12 @@ const NewPositionModal = ({ isOpen, onClose, match, action }: NewPositionModalPr
     const bet: Bet = {
       id: `bet-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       matchId: match.id,
+      matchName: `${match.home} vs ${match.away}`,
       market: match.market,
       betType: action || 'buy',
       betPrice: parseFloat(price),
       stakePerPoint,
+      makeupLimit,
       status: 'open',
       timestamp: Date.now(),
     };
@@ -68,16 +69,16 @@ const NewPositionModal = ({ isOpen, onClose, match, action }: NewPositionModalPr
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div 
-        className="glass rounded-lg max-w-md w-full p-6 animate-fade-in"
+        className="bg-card rounded-lg max-w-md w-full p-6 animate-fade-in"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-xl font-bold">New Position</h2>
           <button 
             onClick={onClose}
-            className="h-8 w-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center"
+            className="h-8 w-8 rounded-full hover:bg-white/10 flex items-center justify-center"
           >
             ×
           </button>
@@ -85,13 +86,13 @@ const NewPositionModal = ({ isOpen, onClose, match, action }: NewPositionModalPr
 
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="space-y-4">
-            <div className="p-3 border border-white/10 rounded-lg bg-white/5">
+            <div className="p-3 border border-border rounded-lg bg-background">
               <div className="text-sm text-muted-foreground mb-1">Market</div>
               <div className="font-medium">{match.home} vs {match.away}</div>
               <div className="text-sm text-muted-foreground mt-1">{match.market}</div>
             </div>
             
-            <div className="p-3 border border-white/10 rounded-lg bg-white/5">
+            <div className="p-3 border border-border rounded-lg bg-background">
               <div className="text-sm text-muted-foreground mb-1">Action</div>
               <div className={`font-medium ${action === 'buy' ? 'text-primary' : 'text-destructive'}`}>
                 {action === 'buy' ? 'Buy at' : 'Sell at'} {price}
@@ -100,46 +101,47 @@ const NewPositionModal = ({ isOpen, onClose, match, action }: NewPositionModalPr
             
             <div className="space-y-2">
               <label className="text-sm" htmlFor="stakePerPoint">Stake Per Point ($)</label>
-              <input
-                id="stakePerPoint"
-                type="number"
-                value={stakePerPoint}
-                onChange={(e) => setStakePerPoint(Number(e.target.value))}
-                min={1}
-                max={1000}
-                className="w-full bg-white/10 border border-white/20 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-primary"
-              />
+              <div className="grid grid-cols-3 gap-2">
+                {[5, 10, 25, 50, 100, 200].map((amount) => (
+                  <button 
+                    key={amount}
+                    type="button"
+                    onClick={() => setStakePerPoint(amount)}
+                    className={`p-2 border rounded transition-colors ${
+                      stakePerPoint === amount 
+                        ? 'bg-primary text-primary-foreground border-primary' 
+                        : 'border-border hover:bg-white/5'
+                    }`}
+                  >
+                    ${amount}
+                  </button>
+                ))}
+              </div>
               <p className="text-xs text-muted-foreground">Amount you win or lose per point difference</p>
             </div>
             
             <div className="space-y-2">
-              <label className="text-sm" htmlFor="totalStake">Total Stake Amount ($)</label>
-              <input
-                id="totalStake"
-                type="number"
-                value={stake}
-                onChange={(e) => setStake(Number(e.target.value))}
-                min={10}
-                max={10000}
-                className="w-full bg-white/10 border border-white/20 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-primary"
-              />
-            </div>
-            
-            <div className="space-y-2">
-              <div className="flex justify-between">
-                <label className="text-sm" htmlFor="stopLoss">Stop Loss (Optional)</label>
-                <span className="text-xs text-muted-foreground">Max Loss: ${maxLoss.toFixed(2)}</span>
+              <label className="text-sm">Makeup Limit (default: 30X)</label>
+              <div className="grid grid-cols-3 gap-2">
+                {[10, 15, 20, 25, 30].map((limit) => (
+                  <button 
+                    key={limit}
+                    type="button"
+                    onClick={() => setMakeupLimit(limit)}
+                    className={`p-2 border rounded transition-colors ${
+                      makeupLimit === limit 
+                        ? 'bg-primary text-primary-foreground border-primary' 
+                        : 'border-border hover:bg-white/5'
+                    }`}
+                  >
+                    {limit}X
+                  </button>
+                ))}
               </div>
-              <input
-                id="stopLoss"
-                type="number"
-                value={stopLoss || ''}
-                onChange={(e) => setStopLoss(e.target.value ? Number(e.target.value) : null)}
-                min={0}
-                max={maxLoss}
-                placeholder="No stop loss"
-                className="w-full bg-white/10 border border-white/20 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-primary"
-              />
+              <div className="flex justify-between text-xs">
+                <span className="text-muted-foreground">Platform will hold ${totalExposure} until event is over</span>
+                <span className="font-medium">Max exposure: ${totalExposure}</span>
+              </div>
             </div>
           </div>
           
