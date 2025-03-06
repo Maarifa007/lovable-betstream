@@ -8,6 +8,7 @@ import SportsNavigation from "@/components/SportsNavigation";
 import MatchList from "@/components/MatchList";
 import BetHistory from "@/components/BetHistory";
 import { toast } from "@/hooks/use-toast";
+import { SpreadsProvider } from "@/contexts/SpreadsContext";
 
 // Type definitions for our data
 interface Market {
@@ -177,58 +178,60 @@ const Index = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground p-4 md:p-6">
-      {/* Header */}
-      <Header 
-        walletBalance={walletBalance}
-        onOpenWalletModal={() => setIsWalletModalOpen(true)}
-        onOpenNewPositionModal={() => setIsNewPositionModalOpen(true)}
-        userWallet={USER_WALLET_ADDRESS}
-        webSocketService={wsRef.current}
-        onBalanceUpdate={handleBalanceUpdate}
-      />
-
-      {/* Main Content */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Sports Navigation */}
-        <SportsNavigation 
-          selectedSport={selectedSport}
-          onSelectSport={setSelectedSport}
+    <SpreadsProvider>
+      <div className="min-h-screen bg-background text-foreground p-4 md:p-6">
+        {/* Header */}
+        <Header 
+          walletBalance={walletBalance}
+          onOpenWalletModal={() => setIsWalletModalOpen(true)}
+          onOpenNewPositionModal={() => setIsNewPositionModalOpen(true)}
+          userWallet={USER_WALLET_ADDRESS}
+          webSocketService={wsRef.current}
+          onBalanceUpdate={handleBalanceUpdate}
         />
 
-        {/* Live Matches and Bet History */}
-        <div className="lg:col-span-9 space-y-6">
-          {/* Live Matches */}
-          <MatchList 
-            matches={liveMatches}
-            isLoading={isLoading}
-            error={error}
+        {/* Main Content */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          {/* Sports Navigation */}
+          <SportsNavigation 
             selectedSport={selectedSport}
-            priceRefs={priceRefs}
-            onOpenNewPosition={handleOpenNewPosition}
+            onSelectSport={setSelectedSport}
           />
-          
-          {/* Bet History */}
-          <BetHistory />
+
+          {/* Live Matches and Bet History */}
+          <div className="lg:col-span-9 space-y-6">
+            {/* Live Matches */}
+            <MatchList 
+              matches={liveMatches}
+              isLoading={isLoading}
+              error={error}
+              selectedSport={selectedSport}
+              priceRefs={priceRefs}
+              onOpenNewPosition={handleOpenNewPosition}
+            />
+            
+            {/* Bet History */}
+            <BetHistory />
+          </div>
         </div>
+        
+        {/* Modals */}
+        <WalletModal 
+          isOpen={isWalletModalOpen} 
+          onClose={() => setIsWalletModalOpen(false)} 
+          balance={walletBalance}
+          userWallet={USER_WALLET_ADDRESS}
+          webSocketService={wsRef.current}
+        />
+        
+        <NewPositionModal 
+          isOpen={isNewPositionModalOpen} 
+          onClose={() => setIsNewPositionModalOpen(false)} 
+          match={selectedMatch || undefined}
+          action={betAction || undefined}
+        />
       </div>
-      
-      {/* Modals */}
-      <WalletModal 
-        isOpen={isWalletModalOpen} 
-        onClose={() => setIsWalletModalOpen(false)} 
-        balance={walletBalance}
-        userWallet={USER_WALLET_ADDRESS}
-        webSocketService={wsRef.current}
-      />
-      
-      <NewPositionModal 
-        isOpen={isNewPositionModalOpen} 
-        onClose={() => setIsNewPositionModalOpen(false)} 
-        match={selectedMatch || undefined}
-        action={betAction || undefined}
-      />
-    </div>
+    </SpreadsProvider>
   );
 };
 

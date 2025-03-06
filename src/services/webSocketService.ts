@@ -8,6 +8,7 @@ class WebSocketService {
   private messageHandlers: ((event: MessageEvent) => void)[] = [];
   private walletHandlers: ((data: { wallet: string, balance: number }) => void)[] = [];
   private withdrawalHandlers: ((data: { type: string, userId: string, amount: number, status: string }) => void)[] = [];
+  private spreadHandlers: ((data: { id: string, buyPrice: string, sellPrice: string }) => void)[] = [];
   
   constructor(url: string) {
     this.url = url;
@@ -108,6 +109,14 @@ class WebSocketService {
     this.withdrawalHandlers = this.withdrawalHandlers.filter(h => h !== handler);
   }
   
+  addSpreadHandler(handler: (data: { id: string, buyPrice: string, sellPrice: string }) => void) {
+    this.spreadHandlers.push(handler);
+  }
+  
+  removeSpreadHandler(handler: (data: { id: string, buyPrice: string, sellPrice: string }) => void) {
+    this.spreadHandlers = this.spreadHandlers.filter(h => h !== handler);
+  }
+  
   send(data: string | ArrayBufferLike | Blob | ArrayBufferView) {
     if (this.socket && this.socket.readyState === WebSocket.OPEN) {
       this.socket.send(data);
@@ -128,6 +137,15 @@ class WebSocketService {
     this.walletHandlers.forEach(handler => handler({
       wallet,
       balance: newBalance
+    }));
+  }
+
+  simulateSpreadUpdate(id: string, buyPrice: string, sellPrice: string) {
+    console.log(`Simulating spread update for market ID ${id}: buy=${buyPrice}, sell=${sellPrice}`);
+    this.spreadHandlers.forEach(handler => handler({
+      id,
+      buyPrice,
+      sellPrice
     }));
   }
 
