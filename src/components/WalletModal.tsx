@@ -4,18 +4,6 @@ import { Wallet, Plus, ArrowRight, ExternalLink, DollarSign, Loader, ShieldCheck
 import { toast } from "@/hooks/use-toast";
 import WebSocketService from "@/services/webSocketService";
 
-// Define the Transak SDK interface
-interface TransakSDK {
-  init: () => void;
-  close: () => void;
-}
-
-declare global {
-  interface Window {
-    TransakSDK: new (config: any) => TransakSDK;
-  }
-}
-
 interface WalletModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -25,8 +13,6 @@ interface WalletModalProps {
 }
 
 const WalletModal = ({ isOpen, onClose, balance, userWallet, webSocketService }: WalletModalProps) => {
-  const [isTransakOpen, setIsTransakOpen] = useState(false);
-  const [isTransakLoaded, setIsTransakLoaded] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [kycVerified, setKycVerified] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
@@ -36,6 +22,11 @@ const WalletModal = ({ isOpen, onClose, balance, userWallet, webSocketService }:
   const [points, setPoints] = useState(balance); // Real money balance (using the existing balance prop)
   const [lastClaimedDate, setLastClaimedDate] = useState<string | null>(null);
   const [canClaimDaily, setCanClaimDaily] = useState(false);
+  
+  // Crypto conversion
+  const [cryptoBalance, setCryptoBalance] = useState(0);
+  const [conversionRate, setConversionRate] = useState(100); // 1 USDC = 100 Points
+  const [isConverting, setIsConverting] = useState(false);
 
   // Simulate loading
   useEffect(() => {
@@ -47,7 +38,7 @@ const WalletModal = ({ isOpen, onClose, balance, userWallet, webSocketService }:
     }
   }, [isOpen]);
 
-  // Check KYC status when modal opens
+  // Check KYC status and load currency balances when modal opens
   useEffect(() => {
     if (isOpen) {
       // In a real app, fetch from an API. For now, we'll check localStorage
@@ -78,27 +69,20 @@ const WalletModal = ({ isOpen, onClose, balance, userWallet, webSocketService }:
       } else {
         setCanClaimDaily(true);
       }
+      
+      // Simulate fetching crypto balance
+      // In a real app, you would connect to the user's wallet and check USDC/USDT balance
+      simulateFetchCryptoBalance();
     }
   }, [isOpen, userWallet, balance]);
 
-  // Load Transak SDK script
-  useEffect(() => {
-    if (!isOpen || isTransakLoaded) return;
-
-    const script = document.createElement('script');
-    script.src = 'https://global.transak.com/sdk/v1.1/widget.js';
-    script.async = true;
-    script.onload = () => {
-      setIsTransakLoaded(true);
-    };
-    document.body.appendChild(script);
-
-    return () => {
-      if (document.body.contains(script)) {
-        document.body.removeChild(script);
-      }
-    };
-  }, [isOpen, isTransakLoaded]);
+  // Function to simulate fetching crypto balance
+  const simulateFetchCryptoBalance = () => {
+    // In a real app, this would connect to MetaMask or another wallet
+    // For now, we'll use a random value between 0 and 10 USDC (for demonstration)
+    const randomBalance = parseFloat((Math.random() * 10).toFixed(2));
+    setCryptoBalance(randomBalance);
+  };
 
   // Function to claim daily free Gold Coins
   const claimDailyGoldCoins = () => {
@@ -131,71 +115,53 @@ const WalletModal = ({ isOpen, onClose, balance, userWallet, webSocketService }:
     });
   };
 
-  // Initialize Transak when deposit button is clicked (for Points)
-  const handlePointsDeposit = (amount?: number) => {
-    if (!isTransakLoaded) {
-      toast({
-        title: "Transak is loading",
-        description: "Please wait a moment and try again."
-      });
-      return;
-    }
-
-    // If KYC is not verified, show a toast message
+  // Function to convert USDC/USDT to Points
+  const convertCryptoToPoints = () => {
+    // Require KYC for Points conversion
     if (!kycVerified) {
       toast({
         title: "KYC Required",
-        description: "You need to complete KYC verification before depositing Points.",
+        description: "You need to complete KYC verification before converting crypto to Points.",
         variant: "destructive"
       });
       return;
     }
-
-    setIsTransakOpen(true);
-
-    // Initialize Transak with configuration
-    const transak = new window.TransakSDK({
-      apiKey: 'f7d6a82b-e8de-45b9-8e99-1041c22e93b8', // This is a example public API key
-      environment: 'STAGING', // STAGING/PRODUCTION
-      defaultCryptoCurrency: 'USDC',
-      walletAddress: userWallet, // Your customer's wallet address
-      themeColor: '000000', // App theme color
-      fiatCurrency: 'USD', // INR/GBP
-      email: '', // Your customer's email address
-      fiatAmount: amount || 100, // Default amount or user selected amount
-      redirectURL: '',
-      hostURL: window.location.origin,
-      widgetHeight: '550px',
-      widgetWidth: '450px',
-      onClose: () => {
-        setIsTransakOpen(false);
-      },
-      onSuccess: (data: any) => {
-        console.log("Transaction Successful:", data);
-        
-        // Simulate balance update for Points
-        const depositAmount = data.fiatAmount || 100; // Default to 100 if not available
-        const newPoints = points + depositAmount;
-        
-        // Update state and localStorage
-        setPoints(newPoints);
-        localStorage.setItem(`points_${userWallet}`, newPoints.toString());
-        
-        // Update the main balance through WebSocketService
-        if (webSocketService) {
-          webSocketService.simulateBalanceUpdate(userWallet, newPoints);
-        }
-        
-        toast({
-          title: "Points Purchase Successful!",
-          description: `${depositAmount} Points have been added to your wallet.`
-        });
-        
-        setIsTransakOpen(false);
+    
+    if (cryptoBalance <= 0) {
+      toast({
+        title: "No Crypto Available",
+        description: "You don't have any USDC/USDT to convert.",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    setIsConverting(true);
+    
+    // Simulate conversion process
+    setTimeout(() => {
+      const pointsToAdd = Math.floor(cryptoBalance * conversionRate);
+      const newPoints = points + pointsToAdd;
+      
+      // Update state
+      setPoints(newPoints);
+      setCryptoBalance(0);
+      
+      // Save to localStorage
+      localStorage.setItem(`points_${userWallet}`, newPoints.toString());
+      
+      // Update the main balance through WebSocketService
+      if (webSocketService) {
+        webSocketService.simulateBalanceUpdate(userWallet, newPoints);
       }
-    });
-
-    transak.init();
+      
+      setIsConverting(false);
+      
+      toast({
+        title: "Conversion Successful!",
+        description: `${cryptoBalance} USDC/USDT converted to ${pointsToAdd} Points.`
+      });
+    }, 1500);
   };
 
   // Function to buy Gold Coins (no KYC required)
@@ -236,6 +202,25 @@ const WalletModal = ({ isOpen, onClose, balance, userWallet, webSocketService }:
       toast({
         title: "KYC Verification Complete",
         description: "Your account has been verified successfully."
+      });
+    }, 3000);
+  };
+
+  // Function to redirect to external crypto purchase site
+  const redirectToExternalCryptoPurchase = () => {
+    // In a real app, this would redirect to your external non-gambling site
+    // For demo purposes, we'll show a toast message
+    toast({
+      title: "Redirecting to Crypto Purchase",
+      description: "You would be redirected to our external site to purchase USDC/USDT."
+    });
+    
+    // Simulate successful purchase and return
+    setTimeout(() => {
+      simulateFetchCryptoBalance();
+      toast({
+        title: "Crypto Purchase Detected",
+        description: "Your new USDC/USDT balance has been updated."
       });
     }, 3000);
   };
@@ -323,6 +308,40 @@ const WalletModal = ({ isOpen, onClose, balance, userWallet, webSocketService }:
                   {points.toLocaleString()}
                 </div>
                 <div className="text-xs text-green-400/70 mt-1">Real money betting</div>
+              </div>
+            </div>
+            
+            {/* Crypto Balance Section */}
+            <div className="p-4 border border-blue-500/20 rounded-lg bg-blue-500/5">
+              <div className="flex justify-between items-center">
+                <div>
+                  <div className="text-sm font-medium mb-1 text-blue-400">USDC/USDT Balance</div>
+                  <div className="text-lg font-bold">{cryptoBalance.toFixed(2)} USDC</div>
+                </div>
+                <button
+                  onClick={convertCryptoToPoints}
+                  disabled={!kycVerified || cryptoBalance <= 0 || isConverting}
+                  className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-colors ${
+                    kycVerified && cryptoBalance > 0 && !isConverting
+                      ? "bg-blue-500 hover:bg-blue-600 text-white"
+                      : "bg-gray-700 text-gray-400 cursor-not-allowed"
+                  }`}
+                >
+                  {isConverting ? (
+                    <>
+                      <Loader className="h-4 w-4 animate-spin" />
+                      Converting...
+                    </>
+                  ) : (
+                    <>
+                      <ArrowRight className="h-4 w-4" />
+                      Convert to Points
+                    </>
+                  )}
+                </button>
+              </div>
+              <div className="text-xs text-muted-foreground mt-2">
+                Conversion rate: 1 USDC = {conversionRate} Points
               </div>
             </div>
             
@@ -418,16 +437,16 @@ const WalletModal = ({ isOpen, onClose, balance, userWallet, webSocketService }:
             {/* Action Buttons */}
             <div className="grid grid-cols-2 gap-4">
               <button 
-                onClick={() => handlePointsDeposit()}
+                onClick={redirectToExternalCryptoPurchase}
                 className={`flex items-center justify-center gap-2 p-3 rounded-lg ${
                   kycVerified 
-                    ? "bg-green-500 text-white hover:bg-green-600" 
+                    ? "bg-blue-500 text-white hover:bg-blue-600" 
                     : "bg-gray-500 text-gray-300 cursor-not-allowed"
                 } transition-colors`}
                 disabled={!kycVerified}
               >
                 <Plus size={16} />
-                Buy Points
+                Buy USDC/USDT
               </button>
               <button 
                 onClick={() => buyGoldCoins()}
@@ -438,17 +457,8 @@ const WalletModal = ({ isOpen, onClose, balance, userWallet, webSocketService }:
               </button>
             </div>
 
-            {isTransakOpen && (
-              <div className="mt-4 p-3 border border-primary/30 rounded-lg bg-primary/5 text-sm flex items-start gap-2">
-                <ExternalLink size={16} className="mt-0.5 flex-shrink-0 text-primary" />
-                <p>
-                  Complete your transaction in the Transak window. Your balance will update automatically once the transaction is complete.
-                </p>
-              </div>
-            )}
-            
             <div className="text-xs text-muted-foreground text-center mt-4">
-              Powered by Transak - Secure, Compliant Crypto On-ramp
+              Convert crypto to Points for betting
             </div>
           </div>
         )}
