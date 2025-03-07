@@ -1,4 +1,3 @@
-
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
 @tailwind base;
@@ -58,6 +57,10 @@
     animation: flash-red 1s ease;
   }
 
+  .flash-update {
+    animation: flash-price 1s ease;
+  }
+
   @keyframes gradient {
     0% { background-position: 0% 50%; }
     50% { background-position: 100% 50%; }
@@ -74,5 +77,11 @@
     0% { background-color: rgba(239, 68, 68, 0); }
     20% { background-color: rgba(239, 68, 68, 0.4); }
     100% { background-color: rgba(239, 68, 68, 0); }
+  }
+
+  @keyframes flash-price {
+    0% { background-color: transparent; }
+    50% { background-color: rgba(59, 130, 246, 0.3); }
+    100% { background-color: transparent; }
   }
 }

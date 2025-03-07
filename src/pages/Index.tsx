@@ -41,28 +41,49 @@ const Index = () => {
   const priceRefs = useRef<Record<string, HTMLDivElement>>({});
   const queryClient = useQueryClient();
 
-  // Handler for balance updates
-  const handleBalanceUpdate = (newBalance: number) => {
-    setWalletBalance(newBalance);
-    toast({
-      title: "Balance Updated",
-      description: `Your balance is now $${newBalance.toLocaleString()}`
-    });
+  // Handler for balance updates with API call
+  const handleBalanceUpdate = async (newBalance: number) => {
+    try {
+      // In a real implementation, you'd fetch the balance from the backend
+      // For now, we'll use the incoming newBalance parameter and simulate an API response
+      setWalletBalance(newBalance);
+      
+      toast({
+        title: "Balance Updated",
+        description: `Your balance is now $${newBalance.toLocaleString()}`
+      });
+    } catch (error) {
+      console.error("Error updating balance:", error);
+      toast({
+        title: "Error",
+        description: "Failed to update balance. Please refresh the page.",
+        variant: "destructive"
+      });
+    }
   };
 
-  // Fetch initial market data
+  // Fetch initial market data with improved error handling
   const { data: initialMarkets, isLoading, error } = useQuery({
     queryKey: ['markets', selectedSport],
     queryFn: async () => {
       try {
-        // Replace with your API endpoint
+        // This will eventually connect to SportsGameOdds API
+        // Replace with your API endpoint when ready
         const response = await fetch(`https://api.your-service.com/markets/${selectedSport}`);
+        
         if (!response.ok) {
           throw new Error('Network response was not ok');
         }
+        
         return response.json();
       } catch (error) {
         console.error("Error fetching markets:", error);
+        toast({
+          title: "Error",
+          description: "Failed to load markets. Using sample data.",
+          variant: "destructive"
+        });
+        
         // Return placeholder data for development
         return [
           {
@@ -96,9 +117,49 @@ const Index = () => {
       setLiveMatches(initialMarkets);
     }
 
-    // WebSocket connection for live updates
+    // WebSocket connection for live updates with proper message handling
     if (!wsRef.current) {
       wsRef.current = new WebSocketService('wss://stream.your-service.com/markets');
+      
+      // Add message handler to update markets in real-time
+      wsRef.current.addMessageHandler((event) => {
+        try {
+          const data = JSON.parse(event.data);
+          
+          // Check if this is a market update
+          if (data.type === 'market_update' && data.id) {
+            setLiveMatches(prevMatches => 
+              prevMatches.map(match => 
+                match.id === data.id 
+                  ? { 
+                      ...match, 
+                      sellPrice: data.sellPrice || match.sellPrice,
+                      buyPrice: data.buyPrice || match.buyPrice,
+                      updatedFields: ['sellPrice', 'buyPrice']
+                    } 
+                  : match
+              )
+            );
+            
+            // Flash the updated price elements
+            if (priceRefs.current[`${data.id}-sellPrice`]) {
+              priceRefs.current[`${data.id}-sellPrice`].classList.add('flash-update');
+              setTimeout(() => {
+                priceRefs.current[`${data.id}-sellPrice`]?.classList.remove('flash-update');
+              }, 1000);
+            }
+            
+            if (priceRefs.current[`${data.id}-buyPrice`]) {
+              priceRefs.current[`${data.id}-buyPrice`].classList.add('flash-update');
+              setTimeout(() => {
+                priceRefs.current[`${data.id}-buyPrice`]?.classList.remove('flash-update');
+              }, 1000);
+            }
+          }
+        } catch (error) {
+          console.error("Error handling WebSocket message:", error);
+        }
+      });
       
       // Initialize WebSocket connection
       wsRef.current.connect();
