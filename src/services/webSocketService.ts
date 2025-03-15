@@ -1,3 +1,4 @@
+
 // Websocket service with reconnection logic
 class WebSocketService {
   private socket: WebSocket | null = null;
@@ -9,6 +10,9 @@ class WebSocketService {
   private walletHandlers: ((data: { wallet: string, balance: number }) => void)[] = [];
   private withdrawalHandlers: ((data: { type: string, userId: string, amount: number, status: string }) => void)[] = [];
   private spreadHandlers: ((data: { id: string, buyPrice: string, sellPrice: string }) => void)[] = [];
+  private openHandlers: (() => void)[] = [];
+  private errorHandlers: ((error: Event) => void)[] = [];
+  private closeHandlers: ((event: CloseEvent) => void)[] = [];
   
   constructor(url: string) {
     this.url = url;
@@ -27,16 +31,19 @@ class WebSocketService {
       console.log('WebSocket connected');
       this.reconnectAttempts = 0;
       this.reconnectTimeout = 1000; // Reset timeout
+      this.openHandlers.forEach(handler => handler());
     };
     
     this.socket.onclose = (event) => {
       console.log(`WebSocket disconnected: ${event.code} ${event.reason}`);
       this.socket = null;
+      this.closeHandlers.forEach(handler => handler(event));
       this.attemptReconnect();
     };
     
     this.socket.onerror = (error) => {
       console.error('WebSocket error:', error);
+      this.errorHandlers.forEach(handler => handler(error));
     };
     
     this.socket.onmessage = (event) => {
@@ -117,6 +124,30 @@ class WebSocketService {
     this.spreadHandlers = this.spreadHandlers.filter(h => h !== handler);
   }
   
+  addOpenHandler(handler: () => void) {
+    this.openHandlers.push(handler);
+  }
+  
+  removeOpenHandler(handler: () => void) {
+    this.openHandlers = this.openHandlers.filter(h => h !== handler);
+  }
+  
+  addErrorHandler(handler: (error: Event) => void) {
+    this.errorHandlers.push(handler);
+  }
+  
+  removeErrorHandler(handler: (error: Event) => void) {
+    this.errorHandlers = this.errorHandlers.filter(h => h !== handler);
+  }
+  
+  addCloseHandler(handler: (event: CloseEvent) => void) {
+    this.closeHandlers.push(handler);
+  }
+  
+  removeCloseHandler(handler: (event: CloseEvent) => void) {
+    this.closeHandlers = this.closeHandlers.filter(h => h !== handler);
+  }
+  
   send(data: string | ArrayBufferLike | Blob | ArrayBufferView) {
     if (this.socket && this.socket.readyState === WebSocket.OPEN) {
       this.socket.send(data);
@@ -157,6 +188,17 @@ class WebSocketService {
       amount,
       status
     }));
+  }
+  
+  simulateBatchUpdate(updates: { id: number, sellPrice: string, buyPrice: string }[]) {
+    console.log(`Simulating batch update for ${updates.length} markets`);
+    const event = new MessageEvent('message', {
+      data: JSON.stringify({
+        type: 'market_updates',
+        updates
+      })
+    });
+    this.messageHandlers.forEach(handler => handler(event));
   }
 }
 

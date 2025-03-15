@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import WebSocketService from "@/services/webSocketService";
@@ -11,6 +12,7 @@ import Sidebar from "@/components/Sidebar";
 import MarketView from "@/components/MarketView";
 import BetSlip from "@/components/BetSlip";
 import LiveBettingChat from "@/components/LiveBettingChat";
+import { fetchMarketData } from "@/utils/apiUtils";
 
 // Type definitions
 interface Market {
@@ -62,53 +64,10 @@ const Index = () => {
     }
   };
 
-  // Fetch initial market data with improved error handling
+  // Fetch initial market data with improved error handling and fallback
   const { data: initialMarkets, isLoading, error } = useQuery({
     queryKey: ['markets', selectedSport],
-    queryFn: async () => {
-      try {
-        // This will eventually connect to SportsGameOdds API
-        // Replace with your API endpoint when ready
-        const response = await fetch(`https://api.your-service.com/markets/${selectedSport}`);
-        
-        if (!response.ok) {
-          throw new Error('Network response was not ok');
-        }
-        
-        return response.json();
-      } catch (error) {
-        console.error("Error fetching markets:", error);
-        toast({
-          title: "Error",
-          description: "Failed to load markets. Using sample data.",
-          variant: "destructive"
-        });
-        
-        // Return placeholder data for development
-        return [
-          {
-            id: 1,
-            home: "West Ham",
-            away: "Leicester",
-            time: "32:15",
-            market: "Total Goals",
-            spread: "2.8-3.0",
-            sellPrice: "2.8",
-            buyPrice: "3.0"
-          },
-          {
-            id: 2,
-            home: "Barcelona",
-            away: "Real Madrid",
-            time: "56:23",
-            market: "Total Corners",
-            spread: "10.5-10.8",
-            sellPrice: "10.5",
-            buyPrice: "10.8"
-          }
-        ];
-      }
-    }
+    queryFn: async () => fetchMarketData(selectedSport)
   });
 
   useEffect(() => {
@@ -117,17 +76,37 @@ const Index = () => {
       setLiveMatches(initialMarkets);
     }
 
-    // WebSocket connection for live updates with proper message handling
+    // WebSocket connection for live updates with enhanced logging and event handling
     if (!wsRef.current) {
       wsRef.current = new WebSocketService('wss://stream.your-service.com/markets');
       
-      // Add message handler to update markets in real-time
+      // Add open handler for successful connections
+      wsRef.current.addOpenHandler(() => {
+        console.log("✅ WebSocket connected successfully.");
+      });
+      
+      // Add error handler for WebSocket errors
+      wsRef.current.addErrorHandler((error) => {
+        console.error("❌ WebSocket encountered an error:", error);
+      });
+      
+      // Add close handler for disconnect events with auto-reconnect
+      wsRef.current.addCloseHandler(() => {
+        console.warn("⚠️ WebSocket disconnected. Attempting to reconnect...");
+        setTimeout(() => {
+          wsRef.current?.connect();
+        }, 3000);
+      });
+      
+      // Add message handler to update markets in real-time with batch processing
       wsRef.current.addMessageHandler((event) => {
         try {
           const data = JSON.parse(event.data);
           
-          // Check if this is a market update
+          // Handle individual market updates (legacy support)
           if (data.type === 'market_update' && data.id) {
+            console.log(`📊 Received market update for ${data.id}:`, data);
+            
             setLiveMatches(prevMatches => 
               prevMatches.map(match => 
                 match.id === data.id 
@@ -156,8 +135,46 @@ const Index = () => {
               }, 1000);
             }
           }
+          
+          // Handle batch updates for improved performance
+          if (data.type === 'market_updates' && Array.isArray(data.updates)) {
+            console.log(`📊 Batch update received for ${data.updates.length} markets.`);
+            
+            setLiveMatches(prevMatches => {
+              const updatedMatches = prevMatches.map(match => {
+                const update = data.updates.find((u: any) => u.id === match.id);
+                if (!update) return match;
+                
+                return { 
+                  ...match, 
+                  sellPrice: update.sellPrice || match.sellPrice,
+                  buyPrice: update.buyPrice || match.buyPrice,
+                  updatedFields: ['sellPrice', 'buyPrice']
+                };
+              });
+              
+              return updatedMatches;
+            });
+            
+            // Flash all updated price elements
+            data.updates.forEach((update: any) => {
+              if (priceRefs.current[`${update.id}-sellPrice`]) {
+                priceRefs.current[`${update.id}-sellPrice`].classList.add('flash-update');
+                setTimeout(() => {
+                  priceRefs.current[`${update.id}-sellPrice`]?.classList.remove('flash-update');
+                }, 1000);
+              }
+              
+              if (priceRefs.current[`${update.id}-buyPrice`]) {
+                priceRefs.current[`${update.id}-buyPrice`].classList.add('flash-update');
+                setTimeout(() => {
+                  priceRefs.current[`${update.id}-buyPrice`]?.classList.remove('flash-update');
+                }, 1000);
+              }
+            });
+          }
         } catch (error) {
-          console.error("Error handling WebSocket message:", error);
+          console.error("❌ WebSocket message error:", error);
         }
       });
       
