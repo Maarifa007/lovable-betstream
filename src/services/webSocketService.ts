@@ -1,4 +1,3 @@
-
 // Websocket service with reconnection logic
 class WebSocketService {
   private socket: WebSocket | null = null;
@@ -227,6 +226,60 @@ class WebSocketService {
       })
     });
     this.messageHandlers.forEach(handler => handler(event));
+  }
+
+  adjustSpreadsByExposure(id: string, exposureLevel: 'normal' | 'medium' | 'high') {
+    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
+      console.error('Cannot adjust spreads, socket is not open');
+      return;
+    }
+
+    console.log(`Adjusting spreads for market ID ${id} based on ${exposureLevel} exposure`);
+    
+    const message = {
+      type: 'adjust_spread',
+      id,
+      exposureLevel
+    };
+    
+    this.socket.send(JSON.stringify(message));
+  }
+
+  simulateSpreadAdjustment(id: string, buyPrice: string, sellPrice: string, exposureLevel: 'normal' | 'medium' | 'high') {
+    let spreadMultiplier = 1;
+    
+    // Calculate spread adjustment based on exposure level
+    switch (exposureLevel) {
+      case 'medium':
+        spreadMultiplier = 1.25; // 25% increase
+        break;
+      case 'high':
+        spreadMultiplier = 1.5; // 50% increase
+        break;
+      default:
+        spreadMultiplier = 1; // No change
+    }
+    
+    // Calculate new buy and sell prices with adjustment
+    const buyPriceNum = parseFloat(buyPrice);
+    const sellPriceNum = parseFloat(sellPrice);
+    const midPoint = (buyPriceNum + sellPriceNum) / 2;
+    const halfSpread = (buyPriceNum - sellPriceNum) / 2;
+    
+    const newHalfSpread = halfSpread * spreadMultiplier;
+    const newBuyPrice = (midPoint + newHalfSpread).toFixed(2);
+    const newSellPrice = (midPoint - newHalfSpread).toFixed(2);
+    
+    console.log(`Simulating spread adjustment for market ID ${id}: ${exposureLevel} exposure`);
+    console.log(`Original: Buy=${buyPrice}, Sell=${sellPrice}`);
+    console.log(`Adjusted: Buy=${newBuyPrice}, Sell=${newSellPrice}`);
+    
+    // Notify spread handlers of the adjustment
+    this.spreadHandlers.forEach(handler => handler({
+      id,
+      buyPrice: newBuyPrice,
+      sellPrice: newSellPrice
+    }));
   }
 }
 

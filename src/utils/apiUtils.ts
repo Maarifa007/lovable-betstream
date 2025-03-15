@@ -55,3 +55,63 @@ export const fetchMarketData = async (sport: string) => {
     }
   }
 };
+
+/**
+ * Send email to admin about high exposure
+ * @param marketId The market ID with high exposure
+ * @param exposureAmount The current exposure amount
+ * @param market Details about the market for context
+ */
+export const notifyAdminOfHighExposure = async (marketId: number, exposureAmount: number, market: any) => {
+  try {
+    console.log(`🚨 Sending high exposure alert to admin for market ID ${marketId}`);
+    
+    // In a real implementation, this would call an API endpoint to send an email
+    const response = await fetch('/api/admin/notify-exposure', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        marketId,
+        exposureAmount,
+        marketDetails: market,
+        timestamp: new Date().toISOString()
+      }),
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to send admin notification');
+    }
+    
+    console.log(`✅ Admin notification sent successfully for market ID ${marketId}`);
+    return true;
+  } catch (error) {
+    console.error("❌ Failed to notify admin:", error);
+    
+    // In case of failure, we still want the app to continue working
+    // This is a non-critical operation
+    return false;
+  }
+};
+
+/**
+ * Calculate the appropriate spread multiplier based on exposure level
+ * @param exposureAmount The current exposure amount
+ * @param baseThreshold The base threshold for medium exposure
+ * @param highThreshold The threshold for high exposure
+ * @returns Spread multiplier (1.0, 1.25, or 1.5)
+ */
+export const calculateSpreadMultiplier = (
+  exposureAmount: number, 
+  baseThreshold = 50000, 
+  highThreshold = 75000
+): { multiplier: number, level: 'normal' | 'medium' | 'high' } => {
+  if (exposureAmount <= baseThreshold) {
+    return { multiplier: 1.0, level: 'normal' };
+  } else if (exposureAmount <= highThreshold) {
+    return { multiplier: 1.25, level: 'medium' }; // 25% increase
+  } else {
+    return { multiplier: 1.5, level: 'high' }; // 50% increase
+  }
+};
