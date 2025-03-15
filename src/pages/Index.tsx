@@ -10,6 +10,7 @@ import { SpreadsProvider } from "@/contexts/SpreadsContext";
 import Sidebar from "@/components/Sidebar";
 import MarketView from "@/components/MarketView";
 import BetSlip from "@/components/BetSlip";
+import LiveBettingChat from "@/components/LiveBettingChat";
 
 // Type definitions
 interface Market {
@@ -212,6 +213,9 @@ const Index = () => {
           {/* Right Bet Slip Panel */}
           <BetSlip />
         </div>
+        
+        {/* Live Betting Chat */}
+        <LiveBettingChat />
         
         {/* Modals */}
         <WalletModal 
