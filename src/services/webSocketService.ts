@@ -1,10 +1,12 @@
+
 // Websocket service with reconnection logic
 class WebSocketService {
   private socket: WebSocket | null = null;
   private url: string;
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
-  private reconnectTimeout = 1000; // Start with 1 second
+  private reconnectTimeout = 5000; // Start with 5 seconds instead of 1 second
+  private maxReconnectTimeout = 30000; // Maximum reconnect timeout of 30 seconds
   private messageHandlers: ((event: MessageEvent) => void)[] = [];
   private walletHandlers: ((data: { wallet: string, balance: number }) => void)[] = [];
   private withdrawalHandlers: ((data: { type: string, userId: string, amount: number, status: string }) => void)[] = [];
@@ -27,21 +29,21 @@ class WebSocketService {
     this.socket = new WebSocket(this.url);
     
     this.socket.onopen = () => {
-      console.log('WebSocket connected');
+      console.log('✅ WebSocket connected successfully');
       this.reconnectAttempts = 0;
-      this.reconnectTimeout = 1000; // Reset timeout
+      this.reconnectTimeout = 5000; // Reset timeout to initial value
       this.openHandlers.forEach(handler => handler());
     };
     
     this.socket.onclose = (event) => {
-      console.log(`WebSocket disconnected: ${event.code} ${event.reason}`);
+      console.log(`⚠️ WebSocket disconnected: ${event.code} ${event.reason}`);
       this.socket = null;
       this.closeHandlers.forEach(handler => handler(event));
       this.attemptReconnect();
     };
     
     this.socket.onerror = (error) => {
-      console.error('WebSocket error:', error);
+      console.error('❌ WebSocket error:', error);
       this.errorHandlers.forEach(handler => handler(error));
     };
     
@@ -104,8 +106,14 @@ class WebSocketService {
     }
     
     this.reconnectAttempts++;
-    const timeout = this.reconnectTimeout * Math.pow(1.5, this.reconnectAttempts - 1); // Exponential backoff
-    console.log(`Attempting to reconnect in ${timeout}ms (attempt ${this.reconnectAttempts})`);
+    
+    // Calculate exponential backoff timeout with a max cap
+    const timeout = Math.min(
+      this.reconnectTimeout * Math.pow(2, this.reconnectAttempts - 1), 
+      this.maxReconnectTimeout
+    );
+    
+    console.log(`⏱️ Attempting to reconnect in ${timeout}ms (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
     
     setTimeout(() => {
       this.connect();
