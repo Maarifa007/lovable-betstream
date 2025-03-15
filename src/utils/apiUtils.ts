@@ -9,6 +9,7 @@ import { toast } from "@/hooks/use-toast";
 export const fetchMarketData = async (sport: string) => {
   try {
     // Try primary API first
+    console.log(`🔄 Fetching market data for ${sport} from primary API...`);
     const response = await fetch(`https://api.your-service.com/markets/${sport}`);
     if (!response.ok) throw new Error('Primary API failed');
 
@@ -29,6 +30,7 @@ export const fetchMarketData = async (sport: string) => {
     
     try {
       // Try backup API if primary fails
+      console.log(`🔄 Trying backup API for ${sport}...`);
       const fallbackResponse = await fetch(`https://backup-api.com/markets/${sport}`);
       if (!fallbackResponse.ok) throw new Error('Backup API also failed');
 

@@ -5,8 +5,8 @@ class WebSocketService {
   private url: string;
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
-  private reconnectTimeout = 5000; // Start with 5 seconds instead of 1 second
-  private maxReconnectTimeout = 30000; // Maximum reconnect timeout of 30 seconds
+  private reconnectTimeout = 5000; // Start with 5 seconds
+  private maxReconnectTimeout = 60000; // Maximum reconnect timeout of 60 seconds (1 minute)
   private messageHandlers: ((event: MessageEvent) => void)[] = [];
   private walletHandlers: ((data: { wallet: string, balance: number }) => void)[] = [];
   private withdrawalHandlers: ((data: { type: string, userId: string, amount: number, status: string }) => void)[] = [];
@@ -30,7 +30,7 @@ class WebSocketService {
     
     this.socket.onopen = () => {
       console.log('✅ WebSocket connected successfully');
-      this.reconnectAttempts = 0;
+      this.reconnectAttempts = 0; // Reset reconnect attempts on successful connection
       this.reconnectTimeout = 5000; // Reset timeout to initial value
       this.openHandlers.forEach(handler => handler());
     };
@@ -101,7 +101,7 @@ class WebSocketService {
   
   private attemptReconnect() {
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      console.log('Max reconnect attempts reached');
+      console.error(`❌ Maximum reconnect attempts (${this.maxReconnectAttempts}) reached. Giving up.`);
       return;
     }
     
@@ -113,7 +113,7 @@ class WebSocketService {
       this.maxReconnectTimeout
     );
     
-    console.log(`⏱️ Attempting to reconnect in ${timeout}ms (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
+    console.log(`⏱️ Attempting to reconnect in ${timeout/1000}s (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
     
     setTimeout(() => {
       this.connect();
