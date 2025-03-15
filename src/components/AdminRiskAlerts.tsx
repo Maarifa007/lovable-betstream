@@ -78,7 +78,7 @@ const AdminRiskAlerts: React.FC = () => {
       description: silenced 
         ? "You will now receive risk alerts" 
         : "Alert notifications have been silenced",
-      variant: silenced ? "default" : "secondary",
+      variant: silenced ? "default" : "destructive", // Changed from "secondary" to "destructive"
     });
   };
   

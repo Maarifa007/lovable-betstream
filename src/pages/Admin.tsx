@@ -9,7 +9,7 @@ import HistoricalExposure from '@/components/HistoricalExposure';
 import Header from '@/components/Header';
 import { SpreadsProvider } from '@/contexts/SpreadsContext';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { AlertTriangle, BarChart3, History, SlackLogo, Wallet } from "lucide-react";
+import { AlertTriangle, BarChart3, History, PanelLeft, Wallet } from "lucide-react";
 
 const Admin = () => {
   const [walletBalance] = useState<number>(10000);
@@ -66,7 +66,7 @@ const Admin = () => {
                 Risk Monitoring ({exposureAlerts.length})
               </TabsTrigger>
               <TabsTrigger value="spreads">
-                <SlackLogo className="h-4 w-4 mr-2" />
+                <PanelLeft className="h-4 w-4 mr-2" />
                 Manage Spreads
               </TabsTrigger>
               <TabsTrigger value="history">
