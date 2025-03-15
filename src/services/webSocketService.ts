@@ -1,4 +1,3 @@
-
 // Websocket service with reconnection logic
 class WebSocketService {
   private socket: WebSocket | null = null;
@@ -64,6 +63,27 @@ class WebSocketService {
           this.walletHandlers.forEach(handler => handler({
             wallet: data.wallet,
             balance: data.points
+          }));
+          return;
+        }
+        
+        // Check if this is a withdrawal notification
+        if (data.type === 'withdrawal_update' && data.userId && data.amount !== undefined && data.status) {
+          this.withdrawalHandlers.forEach(handler => handler({
+            type: data.type,
+            userId: data.userId,
+            amount: data.amount,
+            status: data.status
+          }));
+          return;
+        }
+        
+        // Check if this is a spread update
+        if (data.type === 'spread_update' && data.id && data.buyPrice && data.sellPrice) {
+          this.spreadHandlers.forEach(handler => handler({
+            id: data.id,
+            buyPrice: data.buyPrice,
+            sellPrice: data.sellPrice
           }));
           return;
         }
