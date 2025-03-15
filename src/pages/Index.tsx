@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import WebSocketService from "@/services/webSocketService";
@@ -13,6 +12,7 @@ import MarketView from "@/components/MarketView";
 import BetSlip from "@/components/BetSlip";
 import LiveBettingChat from "@/components/LiveBettingChat";
 import { fetchMarketData } from "@/utils/apiUtils";
+import { debounce } from "lodash";
 
 // Type definitions
 interface Market {
@@ -43,6 +43,45 @@ const Index = () => {
   const priceRefs = useRef<Record<string, HTMLDivElement>>({});
   const queryClient = useQueryClient();
 
+  // Create a debounced market update function to reduce unnecessary re-renders
+  const debouncedUpdateMarkets = useRef(
+    debounce((updates: any[]) => {
+      console.log(`Applying batch update for ${updates.length} markets`);
+      setLiveMatches(prevMatches => {
+        const updatedMatches = prevMatches.map(match => {
+          const update = updates.find(u => u.id === match.id);
+          if (!update) return match;
+          
+          return { 
+            ...match, 
+            sellPrice: update.sellPrice || match.sellPrice,
+            buyPrice: update.buyPrice || match.buyPrice,
+            updatedFields: ['sellPrice', 'buyPrice']
+          };
+        });
+        
+        return updatedMatches;
+      });
+      
+      // Flash the updated price elements
+      updates.forEach(update => {
+        if (priceRefs.current[`${update.id}-sellPrice`]) {
+          priceRefs.current[`${update.id}-sellPrice`].classList.add('flash-update');
+          setTimeout(() => {
+            priceRefs.current[`${update.id}-sellPrice`]?.classList.remove('flash-update');
+          }, 1000);
+        }
+        
+        if (priceRefs.current[`${update.id}-buyPrice`]) {
+          priceRefs.current[`${update.id}-buyPrice`].classList.add('flash-update');
+          setTimeout(() => {
+            priceRefs.current[`${update.id}-buyPrice`]?.classList.remove('flash-update');
+          }, 1000);
+        }
+      });
+    }, 500)
+  ).current;
+
   // Handler for balance updates with API call
   const handleBalanceUpdate = async (newBalance: number) => {
     try {
@@ -67,7 +106,9 @@ const Index = () => {
   // Fetch initial market data with improved error handling and fallback
   const { data: initialMarkets, isLoading, error } = useQuery({
     queryKey: ['markets', selectedSport],
-    queryFn: async () => fetchMarketData(selectedSport)
+    queryFn: async () => fetchMarketData(selectedSport),
+    retry: 3, // Retry up to 3 times if the API call fails
+    retryDelay: attemptIndex => Math.min(1000 * 2 ** attemptIndex, 30000) // Exponential retry delay
   });
 
   useEffect(() => {
@@ -83,6 +124,11 @@ const Index = () => {
       // Add open handler for successful connections
       wsRef.current.addOpenHandler(() => {
         console.log("✅ WebSocket connected successfully.");
+        toast({
+          title: "Connected",
+          description: "Live updates are now active",
+          variant: "default"
+        });
       });
       
       // Add error handler for WebSocket errors
@@ -90,12 +136,16 @@ const Index = () => {
         console.error("❌ WebSocket encountered an error:", error);
       });
       
-      // Add close handler for disconnect events with auto-reconnect
-      wsRef.current.addCloseHandler(() => {
+      // Add close handler for disconnect events
+      wsRef.current.addCloseHandler((event) => {
         console.warn("⚠️ WebSocket disconnected. Attempting to reconnect...");
-        setTimeout(() => {
-          wsRef.current?.connect();
-        }, 3000);
+        if (event.code !== 1000) { // Not a normal closure
+          toast({
+            title: "Connection Lost",
+            description: "Attempting to reconnect to live updates...",
+            variant: "destructive"
+          });
+        }
       });
       
       // Add message handler to update markets in real-time with batch processing
@@ -106,72 +156,13 @@ const Index = () => {
           // Handle individual market updates (legacy support)
           if (data.type === 'market_update' && data.id) {
             console.log(`📊 Received market update for ${data.id}:`, data);
-            
-            setLiveMatches(prevMatches => 
-              prevMatches.map(match => 
-                match.id === data.id 
-                  ? { 
-                      ...match, 
-                      sellPrice: data.sellPrice || match.sellPrice,
-                      buyPrice: data.buyPrice || match.buyPrice,
-                      updatedFields: ['sellPrice', 'buyPrice']
-                    } 
-                  : match
-              )
-            );
-            
-            // Flash the updated price elements
-            if (priceRefs.current[`${data.id}-sellPrice`]) {
-              priceRefs.current[`${data.id}-sellPrice`].classList.add('flash-update');
-              setTimeout(() => {
-                priceRefs.current[`${data.id}-sellPrice`]?.classList.remove('flash-update');
-              }, 1000);
-            }
-            
-            if (priceRefs.current[`${data.id}-buyPrice`]) {
-              priceRefs.current[`${data.id}-buyPrice`].classList.add('flash-update');
-              setTimeout(() => {
-                priceRefs.current[`${data.id}-buyPrice`]?.classList.remove('flash-update');
-              }, 1000);
-            }
+            debouncedUpdateMarkets([data]);
           }
           
           // Handle batch updates for improved performance
           if (data.type === 'market_updates' && Array.isArray(data.updates)) {
             console.log(`📊 Batch update received for ${data.updates.length} markets.`);
-            
-            setLiveMatches(prevMatches => {
-              const updatedMatches = prevMatches.map(match => {
-                const update = data.updates.find((u: any) => u.id === match.id);
-                if (!update) return match;
-                
-                return { 
-                  ...match, 
-                  sellPrice: update.sellPrice || match.sellPrice,
-                  buyPrice: update.buyPrice || match.buyPrice,
-                  updatedFields: ['sellPrice', 'buyPrice']
-                };
-              });
-              
-              return updatedMatches;
-            });
-            
-            // Flash all updated price elements
-            data.updates.forEach((update: any) => {
-              if (priceRefs.current[`${update.id}-sellPrice`]) {
-                priceRefs.current[`${update.id}-sellPrice`].classList.add('flash-update');
-                setTimeout(() => {
-                  priceRefs.current[`${update.id}-sellPrice`]?.classList.remove('flash-update');
-                }, 1000);
-              }
-              
-              if (priceRefs.current[`${update.id}-buyPrice`]) {
-                priceRefs.current[`${update.id}-buyPrice`].classList.add('flash-update');
-                setTimeout(() => {
-                  priceRefs.current[`${update.id}-buyPrice`]?.classList.remove('flash-update');
-                }, 1000);
-              }
-            });
+            debouncedUpdateMarkets(data.updates);
           }
         } catch (error) {
           console.error("❌ WebSocket message error:", error);
@@ -184,12 +175,13 @@ const Index = () => {
 
     // Cleanup WebSocket on unmount
     return () => {
+      debouncedUpdateMarkets.cancel(); // Cancel any pending debounced updates
       if (wsRef.current) {
         wsRef.current.disconnect();
         wsRef.current = null;
       }
     };
-  }, [initialMarkets, queryClient, selectedSport]);
+  }, [initialMarkets, queryClient, selectedSport, debouncedUpdateMarkets]);
 
   const handleOpenNewPosition = (match: Market, action: 'buy' | 'sell') => {
     setSelectedMatch(match);

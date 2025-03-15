@@ -1,4 +1,6 @@
 
+import { toast } from "@/hooks/use-toast";
+
 /**
  * Fetch market data with fallback support
  * @param sport The sport to fetch market data for
@@ -18,6 +20,13 @@ export const fetchMarketData = async (sport: string) => {
   } catch (error) {
     console.warn("⚠️ Primary API failed. Switching to fallback API...", error);
     
+    // Notify the user that we're using the backup API
+    toast({
+      title: "Using Backup Data Source",
+      description: "We're experiencing issues with our primary data provider. Switched to backup.",
+      variant: "warning",
+    });
+    
     try {
       // Try backup API if primary fails
       const fallbackResponse = await fetch(`https://backup-api.com/markets/${sport}`);
@@ -28,6 +37,13 @@ export const fetchMarketData = async (sport: string) => {
       return fallbackData;
     } catch (fallbackError) {
       console.error("❌ Both primary and fallback APIs failed:", fallbackError);
+      
+      // Notify the user that all APIs failed
+      toast({
+        title: "Connection Error",
+        description: "Unable to fetch live market data. Using cached data.",
+        variant: "destructive",
+      });
       
       // Return placeholder data if both APIs fail
       return [
