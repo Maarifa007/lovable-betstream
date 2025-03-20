@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { MessageCircle, X, Send } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
@@ -12,14 +11,10 @@ const LiveBettingChat = () => {
   const fetchLivePrices = async (sport: string) => {
     try {
       setIsLoading(true);
-      // Add a message showing that we're fetching prices
       setMessages(prev => [...prev, { text: `Fetching live prices for ${sport}...`, sender: "bot" }]);
 
-      // For now, we'll simulate an API call with a timeout
-      // In production, this would call your actual API endpoint
       await new Promise(resolve => setTimeout(resolve, 1500));
       
-      // Sample data for demo purposes
       const sampleData = [
         { market_name: `${sport === 'football' ? 'West Ham vs Leicester' : 'Lakers vs Warriors'}`, buy_price: "3.2", sell_price: "2.8" },
         { market_name: `${sport === 'football' ? 'Barcelona vs Real Madrid' : 'Bulls vs Celtics'}`, buy_price: "10.8", sell_price: "10.2" }
@@ -47,7 +42,6 @@ const LiveBettingChat = () => {
   const handleSendMessage = async () => {
     if (!input.trim()) return;
     
-    // Add the user message to the chat
     const userMessage = input.trim();
     setMessages(prev => [...prev, { text: userMessage, sender: "user" }]);
     setInput("");
@@ -55,13 +49,10 @@ const LiveBettingChat = () => {
     try {
       setIsLoading(true);
       
-      // Check if it's a command first
       if (userMessage.startsWith('/')) {
-        // Process commands like before
         if (userMessage.startsWith('/buy') || userMessage.startsWith('/sell')) {
-          // Parse commands like "/buy Lakers 100"
           const parts = userMessage.split(' ');
-          const action = parts[0].substring(1); // "buy" or "sell"
+          const action = parts[0].substring(1);
           const market = parts.length > 2 ? parts[1] : ""; 
           const amount = parts.length > 2 ? parseInt(parts[2]) : 0;
           
@@ -73,10 +64,8 @@ const LiveBettingChat = () => {
             return;
           }
           
-          // Simulate processing a bet
           await new Promise(resolve => setTimeout(resolve, 1000));
           
-          // Add a new bet to localStorage for demo purposes
           const betId = `bet-${Date.now()}`;
           const bet = {
             id: betId,
@@ -91,7 +80,6 @@ const LiveBettingChat = () => {
             timestamp: Date.now()
           };
           
-          // Store in localStorage for demo
           const storedBets = localStorage.getItem('userBets');
           const bets = storedBets ? JSON.parse(storedBets) : [];
           localStorage.setItem('userBets', JSON.stringify([...bets, bet]));
@@ -114,55 +102,39 @@ const LiveBettingChat = () => {
             sender: "bot" 
           }]);
         } else {
-          // Generic response for non-command messages
           setMessages(prev => [...prev, { 
             text: "I'm your betting assistant. Try using commands like '/buy Lakers 100' or '/sell West Ham 50', or type '/help' for assistance.", 
             sender: "bot" 
           }]);
         }
       } else {
-        // NEW: Call AI chatbot API for natural language queries
         try {
-          // In a real app, this would be a fetch to your /api/chatbot endpoint
-          // const response = await fetch('/api/chatbot', {
-          //   method: 'POST',
-          //   headers: { 'Content-Type': 'application/json' },
-          //   body: JSON.stringify({ message: userMessage })
-          // });
-          // const data = await response.json();
+          const response = await fetch('/api/chatbot', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: userMessage })
+          });
           
-          // For demo purposes, simulate API response
-          await new Promise(resolve => setTimeout(resolve, 1500));
-          
-          // Generate a context-aware response based on the message
-          let aiResponse = "";
-          const lowerCaseMessage = userMessage.toLowerCase();
-          
-          if (lowerCaseMessage.includes("odds") || lowerCaseMessage.includes("price")) {
-            aiResponse = "Based on current market data, the odds for popular matches are:\n\n" +
-                         "Liverpool vs Chelsea: Buy 2.5 | Sell 2.1 (Total Goals)\n" +
-                         "Lakers vs Warriors: Buy 220.5 | Sell 217.5 (Total Points)\n\n" +
-                         "Would you like me to show you more markets or help you place a bet?";
-          } else if (lowerCaseMessage.includes("trend") || lowerCaseMessage.includes("analysis")) {
-            aiResponse = "📈 Market Trend Analysis:\n\n" +
-                         "Over the past 24 hours, we've seen increasing volume on NBA total points markets, with the average line moving up 3.5 points. European football matches are trending toward lower spreads on total goals markets.\n\n" +
-                         "The most actively traded market right now is Lakers vs Warriors total points.";
-          } else if (lowerCaseMessage.includes("strategy") || lowerCaseMessage.includes("advice")) {
-            aiResponse = "Betting Strategy Insight:\n\n" +
-                         "For spread betting, it's crucial to monitor line movements. Current data suggests value in selling total points in NBA games that have back-to-back scheduling.\n\n" +
-                         "Would you like specific advice for a particular market?";
-          } else {
-            aiResponse = "I'm your AI betting assistant. I can provide market insights, odds information, and betting strategies. Try asking about current odds, market trends, or specific betting strategies. You can also use commands like '/buy Lakers 100' to place bets directly.";
+          if (!response.ok) {
+            throw new Error(`API error: ${response.status}`);
           }
           
-          setMessages(prev => [...prev, { text: aiResponse, sender: "bot" }]);
+          const data = await response.json();
+          
+          setMessages(prev => [...prev, { text: data.response, sender: "bot" }]);
           
         } catch (error) {
           console.error("Error calling chatbot API:", error);
           setMessages(prev => [...prev, { 
-            text: "Sorry, I'm having trouble connecting to my betting intelligence. Please try again later.", 
+            text: "Sorry, I'm having trouble connecting to the betting intelligence API. Please try again later.", 
             sender: "bot" 
           }]);
+          
+          toast({
+            title: "Connection Error",
+            description: "Failed to reach AI betting assistant",
+            variant: "destructive"
+          });
         }
       }
     } catch (error) {
@@ -182,7 +154,6 @@ const LiveBettingChat = () => {
 
   return (
     <div className="z-50">
-      {/* Floating chat button */}
       <button 
         className="fixed bottom-6 right-6 bg-primary text-primary-foreground h-14 w-14 rounded-full flex items-center justify-center shadow-lg hover:bg-primary/90 transition-colors"
         onClick={() => setIsOpen(!isOpen)}
@@ -191,10 +162,8 @@ const LiveBettingChat = () => {
         {isOpen ? <X className="h-6 w-6" /> : <MessageCircle className="h-6 w-6" />}
       </button>
 
-      {/* Chat window */}
       {isOpen && (
         <div className="fixed bottom-24 right-6 bg-card border border-border rounded-lg shadow-lg w-80 sm:w-96 max-h-[32rem] flex flex-col">
-          {/* Chat header */}
           <div className="p-3 border-b border-border flex justify-between items-center">
             <h2 className="font-semibold">🎲 Live Betting Assistant</h2>
             <button 
@@ -205,7 +174,6 @@ const LiveBettingChat = () => {
             </button>
           </div>
           
-          {/* Sport button controls */}
           <div className="p-2 flex space-x-2 border-b border-border">
             <button 
               className="bg-primary/10 hover:bg-primary/20 text-primary px-3 py-1.5 rounded-full text-sm"
@@ -223,7 +191,6 @@ const LiveBettingChat = () => {
             </button>
           </div>
           
-          {/* Messages area */}
           <div className="flex-1 overflow-y-auto p-3 space-y-3 min-h-[300px] max-h-[400px]">
             {messages.length === 0 ? (
               <div className="text-center text-muted-foreground py-6">
@@ -256,7 +223,6 @@ const LiveBettingChat = () => {
             )}
           </div>
           
-          {/* Input area */}
           <div className="p-3 border-t border-border">
             <div className="flex space-x-2">
               <input

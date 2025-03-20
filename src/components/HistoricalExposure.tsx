@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line } from 'recharts';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -23,14 +22,23 @@ const HistoricalExposure: React.FC = () => {
   useEffect(() => {
     const fetchHistoricalData = async () => {
       try {
-        // In a real implementation, this would call an actual API
-        // const response = await fetch(`/api/historical-exposure?range=${timeRange}`);
-        // const data = await response.json();
+        try {
+          const response = await fetch(`/api/historical-exposure?range=${timeRange}`);
+          
+          if (!response.ok) {
+            throw new Error(`API returned status: ${response.status}`);
+          }
+          
+          const data = await response.json();
+          setExposureData(data);
+          setLoading(false);
+          return;
+        } catch (apiError) {
+          console.error('API fetch failed, using fallback data:', apiError);
+        }
         
-        // For this demo, we'll simulate the data
         const mockData: ExposureDataPoint[] = [];
         
-        // Generate data points based on the time range
         let dataPoints = 0;
         let interval = '';
         
@@ -57,7 +65,6 @@ const HistoricalExposure: React.FC = () => {
           'First Goalscorer'
         ];
         
-        // Generate random data points
         for (let i = 0; i < dataPoints; i++) {
           const date = new Date();
           
@@ -70,11 +77,9 @@ const HistoricalExposure: React.FC = () => {
           const markets: {[key: string]: number} = {};
           let totalExposure = 0;
           
-          // Generate random data for each market
           marketNames.forEach(market => {
-            // Base value + random component + trend that increases over time
             const baseValue = 30000 + Math.random() * 20000;
-            const trend = 500 * i; // Exposure tends to increase over time
+            const trend = 500 * i;
             const randomComponent = Math.random() * 15000 - 7500;
             
             const value = Math.floor(baseValue + trend + randomComponent);
@@ -107,7 +112,6 @@ const HistoricalExposure: React.FC = () => {
     fetchHistoricalData();
   }, [timeRange]);
   
-  // Transform the data for the stacked bar chart
   const getBarChartData = () => {
     return exposureData.map(dataPoint => {
       const result: any = { date: dataPoint.date };
@@ -120,7 +124,6 @@ const HistoricalExposure: React.FC = () => {
     });
   };
   
-  // Transform the data for the line chart (total exposure)
   const getLineChartData = () => {
     return exposureData.map(dataPoint => ({
       date: dataPoint.date,
@@ -128,26 +131,47 @@ const HistoricalExposure: React.FC = () => {
     }));
   };
   
-  // List all market names in the dataset
   const getMarketNames = () => {
     if (exposureData.length === 0) return [];
     return Object.keys(exposureData[0].markets);
   };
   
-  // Generate random colors for the chart
   const getChartColors = () => {
     return [
-      '#FF6384', // Pink
-      '#36A2EB', // Blue
-      '#FFCE56', // Yellow
-      '#4BC0C0', // Teal
-      '#9966FF', // Purple
-      '#FF9F40'  // Orange
+      '#FF6384',
+      '#36A2EB',
+      '#FFCE56',
+      '#4BC0C0',
+      '#9966FF',
+      '#FF9F40'
     ];
   };
   
-  const handleExportData = () => {
+  const handleExportData = async () => {
     try {
+      try {
+        const response = await fetch(`/api/export-historical-data?range=${timeRange}`);
+        
+        if (response.ok) {
+          const blob = await response.blob();
+          const url = window.URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.setAttribute('download', `exposure-data-${timeRange}.csv`);
+          document.body.appendChild(link);
+          link.click();
+          link.remove();
+          
+          toast({
+            title: "Success",
+            description: "Data exported successfully from API",
+          });
+          return;
+        }
+      } catch (apiError) {
+        console.error('API export failed, falling back to local export:', apiError);
+      }
+      
       const csvContent = 'data:text/csv;charset=utf-8,' + 
         'Date,' + getMarketNames().join(',') + ',Total\n' +
         exposureData.map(dataPoint => {

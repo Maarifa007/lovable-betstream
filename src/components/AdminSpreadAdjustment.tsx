@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useSpreads } from '@/contexts/SpreadsContext';
 import { toast } from '@/hooks/use-toast';
@@ -40,7 +39,6 @@ const AdminSpreadAdjustment: React.FC = () => {
   const [scheduleDate, setScheduleDate] = useState<string>("");
   const [scheduleTime, setScheduleTime] = useState<string>("");
   
-  // Load adjustment logs from localStorage on component mount
   useEffect(() => {
     const savedLogs = localStorage.getItem('spreadAdjustmentLogs');
     if (savedLogs) {
@@ -52,13 +50,11 @@ const AdminSpreadAdjustment: React.FC = () => {
       setScheduledAdjustments(JSON.parse(savedScheduled));
     }
     
-    // Set default schedule time to 1 hour from now
     const now = new Date();
     const oneHourLater = new Date(now.getTime() + 60 * 60 * 1000);
     setScheduleDate(oneHourLater.toISOString().split('T')[0]);
     setScheduleTime(oneHourLater.toTimeString().split(' ')[0].substring(0, 5));
     
-    // Check for scheduled adjustments that need to be applied
     const checkScheduledAdjustments = setInterval(() => {
       const now = new Date();
       
@@ -71,18 +67,15 @@ const AdminSpreadAdjustment: React.FC = () => {
             const scheduledTime = new Date(adjustment.scheduledTime);
             
             if (now >= scheduledTime) {
-              // Time to apply this adjustment
               const marketToAdjust = spreads.find(s => s.id === adjustment.marketId);
               
               if (marketToAdjust) {
-                // Calculate and apply the adjustment
                 applySpreadAdjustment(
                   adjustment.marketId, 
                   adjustment.spreadMultiplier,
                   `Scheduled adjustment (ID: ${adjustment.id})`
                 );
                 
-                // Mark as completed
                 adjustment.status = 'completed';
                 hasUpdates = true;
                 
@@ -101,7 +94,7 @@ const AdminSpreadAdjustment: React.FC = () => {
         
         return updated;
       });
-    }, 30000); // Check every 30 seconds
+    }, 30000);
     
     return () => clearInterval(checkScheduledAdjustments);
   }, [spreads]);
@@ -115,48 +108,86 @@ const AdminSpreadAdjustment: React.FC = () => {
     setSpreadMultiplier(isNaN(value) ? 1 : value);
   };
   
-  // Apply the spread adjustment to a market
-  const applySpreadAdjustment = (marketId: string, multiplier: number, source: string = 'Manual adjustment') => {
-    // Get the selected spread
+  const applySpreadAdjustment = async (marketId: string, multiplier: number, source: string = 'Manual adjustment') => {
     const selectedSpread = spreads.find(s => s.id === marketId);
     
     if (!selectedSpread) {
       throw new Error("Selected market not found");
     }
     
-    // Calculate the midpoint of the current spread
     const currentBuyPrice = parseFloat(selectedSpread.buyPrice);
     const currentSellPrice = parseFloat(selectedSpread.sellPrice);
     const midPoint = (currentBuyPrice + currentSellPrice) / 2;
     const halfSpread = (currentBuyPrice - currentSellPrice) / 2;
     
-    // Calculate the new spread
     const newHalfSpread = halfSpread * multiplier;
     const newBuyPrice = (midPoint + newHalfSpread).toFixed(2);
     const newSellPrice = (midPoint - newHalfSpread).toFixed(2);
     
-    // Update local state
-    updateSpread(marketId, newBuyPrice, newSellPrice);
-    
-    // Log the adjustment
-    const logEntry: SpreadAdjustmentLog = {
-      id: Date.now().toString(),
-      marketId: marketId,
-      marketName: selectedSpread.market,
-      timestamp: new Date().toISOString(),
-      oldBuyPrice: selectedSpread.buyPrice,
-      oldSellPrice: selectedSpread.sellPrice,
-      newBuyPrice: newBuyPrice,
-      newSellPrice: newSellPrice,
-      adjustedBy: source,
-      multiplier: multiplier
-    };
-    
-    const updatedLogs = [logEntry, ...adjustmentLogs];
-    setAdjustmentLogs(updatedLogs);
-    localStorage.setItem('spreadAdjustmentLogs', JSON.stringify(updatedLogs));
-    
-    return { newBuyPrice, newSellPrice };
+    try {
+      const response = await fetch('/api/admin-adjust-spreads', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          marketId,
+          spreadMultiplier: multiplier,
+          newBuyPrice,
+          newSellPrice,
+          source
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error(`API returned status: ${response.status}`);
+      }
+      
+      updateSpread(marketId, newBuyPrice, newSellPrice);
+      
+      const logEntry: SpreadAdjustmentLog = {
+        id: Date.now().toString(),
+        marketId: marketId,
+        marketName: selectedSpread.market,
+        timestamp: new Date().toISOString(),
+        oldBuyPrice: selectedSpread.buyPrice,
+        oldSellPrice: selectedSpread.sellPrice,
+        newBuyPrice: newBuyPrice,
+        newSellPrice: newSellPrice,
+        adjustedBy: source,
+        multiplier: multiplier
+      };
+      
+      const updatedLogs = [logEntry, ...adjustmentLogs];
+      setAdjustmentLogs(updatedLogs);
+      localStorage.setItem('spreadAdjustmentLogs', JSON.stringify(updatedLogs));
+      
+      return { newBuyPrice, newSellPrice };
+    } catch (error) {
+      console.error('API call to adjust spread failed:', error);
+      
+      console.warn('Falling back to local state update only');
+      updateSpread(marketId, newBuyPrice, newSellPrice);
+      
+      const logEntry: SpreadAdjustmentLog = {
+        id: Date.now().toString(),
+        marketId: marketId,
+        marketName: selectedSpread.market,
+        timestamp: new Date().toISOString(),
+        oldBuyPrice: selectedSpread.buyPrice,
+        oldSellPrice: selectedSpread.sellPrice,
+        newBuyPrice: newBuyPrice,
+        newSellPrice: newSellPrice,
+        adjustedBy: `${source} (local only - API failed)`,
+        multiplier: multiplier
+      };
+      
+      const updatedLogs = [logEntry, ...adjustmentLogs];
+      setAdjustmentLogs(updatedLogs);
+      localStorage.setItem('spreadAdjustmentLogs', JSON.stringify(updatedLogs));
+      
+      return { newBuyPrice, newSellPrice };
+    }
   };
   
   const handleAdjustSpread = async () => {
@@ -181,21 +212,16 @@ const AdminSpreadAdjustment: React.FC = () => {
     setIsAdjusting(true);
     
     try {
-      // Apply the adjustment
       applySpreadAdjustment(selectedMarketId, spreadMultiplier);
       
-      // Get the selected spread for the success message
       const selectedSpread = spreads.find(s => s.id === selectedMarketId);
       
-      // Show success message
       toast({
         title: "Success",
         description: `Spread adjusted by ${(spreadMultiplier - 1) * 100}% for ${selectedSpread?.market}`,
       });
       
-      // Log the change (in a real app, this might be sent to a history endpoint)
       console.log(`✅ Admin adjusted spread for market ${selectedSpread?.market}`);
-      
     } catch (error) {
       console.error('Failed to adjust spread:', error);
       toast({
@@ -237,11 +263,9 @@ const AdminSpreadAdjustment: React.FC = () => {
     }
     
     try {
-      // Create scheduled time
       const scheduledTimeStr = `${scheduleDate}T${scheduleTime}:00`;
       const scheduledTime = new Date(scheduledTimeStr);
       
-      // Validate the scheduled time is in the future
       if (scheduledTime <= new Date()) {
         toast({
           title: "Error",
@@ -251,14 +275,12 @@ const AdminSpreadAdjustment: React.FC = () => {
         return;
       }
       
-      // Get the market details
       const selectedMarket = spreads.find(s => s.id === selectedMarketId);
       
       if (!selectedMarket) {
         throw new Error("Selected market not found");
       }
       
-      // Create the scheduled adjustment
       const newScheduledAdjustment: ScheduledAdjustment = {
         id: Date.now().toString(),
         marketId: selectedMarketId,
@@ -268,17 +290,14 @@ const AdminSpreadAdjustment: React.FC = () => {
         status: 'pending'
       };
       
-      // Add to list and save to localStorage
       const updatedScheduled = [newScheduledAdjustment, ...scheduledAdjustments];
       setScheduledAdjustments(updatedScheduled);
       localStorage.setItem('scheduledAdjustments', JSON.stringify(updatedScheduled));
       
-      // Show success message
       toast({
         title: "Adjustment Scheduled",
         description: `Spread adjustment scheduled for ${scheduledTime.toLocaleString()}`,
       });
-      
     } catch (error) {
       console.error('Failed to schedule adjustment:', error);
       toast({
@@ -306,7 +325,6 @@ const AdminSpreadAdjustment: React.FC = () => {
     });
   };
   
-  // Determine if the adjustment is a significant change
   const isSignificantChange = spreadMultiplier > 1.3;
   
   return (

@@ -5,6 +5,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { toast } from "@/hooks/use-toast";
 import { calculateSpreadMultiplier } from '@/utils/apiUtils';
 import WebSocketService from '@/services/webSocketService';
+import { useNotifications } from '@/contexts/NotificationContext';
 
 interface MarketExposure {
   id: string;
@@ -19,6 +20,7 @@ const AdminRiskDashboard: React.FC = () => {
   const [markets, setMarkets] = useState<MarketExposure[]>([]);
   const [loading, setLoading] = useState(true);
   const [wsConnected, setWsConnected] = useState(false);
+  const { settings } = useNotifications();
   
   // Create WebSocket service instance
   useEffect(() => {
@@ -101,6 +103,13 @@ const AdminRiskDashboard: React.FC = () => {
       if (index !== -1) {
         newMarkets[index] = updatedMarket;
         
+        // Check if exposure is above threshold and send alert if needed
+        if (updatedMarket.totalExposure > settings.riskThreshold && 
+            updatedMarket.trend === 'up' && 
+            settings.emailNotificationsEnabled) {
+          sendExposureAlert(updatedMarket);
+        }
+        
         // Remove flashing after 2 seconds
         if (updatedMarket.flashing) {
           setTimeout(() => {
@@ -120,15 +129,59 @@ const AdminRiskDashboard: React.FC = () => {
     });
   };
   
-  // Fetch market exposure data (in a real app, this would be from an API)
+  // Function to send alert to backend API
+  const sendExposureAlert = async (market: MarketExposure) => {
+    try {
+      const response = await fetch('/api/send-alert', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          marketId: market.id,
+          marketName: market.marketName,
+          totalExposure: market.totalExposure,
+          recipients: settings.recipientEmails
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to send alert');
+      }
+      
+      console.log(`Alert sent for high exposure on ${market.marketName}`);
+    } catch (error) {
+      console.error('Failed to send exposure alert:', error);
+      toast({
+        title: "Alert Error",
+        description: "Failed to send high-exposure alert email",
+        variant: "destructive",
+      });
+    }
+  };
+  
+  // Fetch market exposure data from API
   useEffect(() => {
     const fetchExposure = async () => {
       try {
-        // In a real implementation, this would call an actual API
-        // const response = await fetch('/api/get-risk-dashboard');
-        // const data = await response.json();
+        // Try to fetch from the API endpoint
+        try {
+          const response = await fetch('/api/get-risk-dashboard');
+          
+          if (!response.ok) {
+            throw new Error(`API returned status: ${response.status}`);
+          }
+          
+          const data = await response.json();
+          setMarkets(data);
+          setLoading(false);
+          return;
+        } catch (apiError) {
+          console.error('API fetch failed, using fallback data:', apiError);
+          // Fallback to mock data if API fails
+        }
         
-        // For this demo, we'll simulate the data
+        // Fallback mock data (same as existing)
         const mockData: MarketExposure[] = [
           { 
             id: '1', 
