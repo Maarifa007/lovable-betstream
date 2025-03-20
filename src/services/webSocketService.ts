@@ -15,7 +15,28 @@ class WebSocketService {
   private closeHandlers: ((event: CloseEvent) => void)[] = [];
   
   constructor(url: string) {
-    this.url = url;
+    // Use the provided URL or try to detect the environment and use the appropriate URL
+    const apiUrl = url || this.detectEnvironmentApiUrl();
+    console.log(`Initializing WebSocketService with URL: ${apiUrl}`);
+    this.url = apiUrl;
+  }
+  
+  // Try to detect the appropriate API URL based on the environment
+  private detectEnvironmentApiUrl(): string {
+    // Check if we're in production or development
+    const isProd = window.location.hostname !== "localhost" && 
+                  !window.location.hostname.includes("127.0.0.1");
+    
+    // Use the appropriate WebSocket URL based on environment
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    
+    if (isProd) {
+      // Production environments - use absolute URL from same domain
+      return `${wsProtocol}//${window.location.host}/ws`;
+    } else {
+      // Development environment
+      return 'ws://localhost:3001/ws';
+    }
   }
   
   connect() {
@@ -25,77 +46,86 @@ class WebSocketService {
     }
     
     console.log(`Connecting to WebSocket: ${this.url}`);
-    this.socket = new WebSocket(this.url);
     
-    this.socket.onopen = () => {
-      console.log('✅ WebSocket connected successfully');
-      this.reconnectAttempts = 0; // Reset reconnect attempts on successful connection
-      this.reconnectTimeout = 5000; // Reset timeout to initial value
-      this.openHandlers.forEach(handler => handler());
-    };
-    
-    this.socket.onclose = (event) => {
-      console.log(`⚠️ WebSocket disconnected: ${event.code} ${event.reason}`);
-      this.socket = null;
-      this.closeHandlers.forEach(handler => handler(event));
+    try {
+      this.socket = new WebSocket(this.url);
+      
+      this.socket.onopen = () => {
+        console.log('✅ WebSocket connected successfully');
+        this.reconnectAttempts = 0; // Reset reconnect attempts on successful connection
+        this.reconnectTimeout = 5000; // Reset timeout to initial value
+        this.openHandlers.forEach(handler => handler());
+      };
+      
+      this.socket.onclose = (event) => {
+        console.log(`⚠️ WebSocket disconnected: ${event.code} ${event.reason}`);
+        this.socket = null;
+        this.closeHandlers.forEach(handler => handler(event));
+        this.attemptReconnect();
+      };
+      
+      this.socket.onerror = (error) => {
+        console.error('❌ WebSocket error:', error);
+        this.errorHandlers.forEach(handler => handler(error));
+      };
+      
+      this.socket.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          
+          // Check if this is a wallet balance update
+          if (data.type === 'wallet_update' && data.wallet && data.balance !== undefined) {
+            this.walletHandlers.forEach(handler => handler({
+              wallet: data.wallet,
+              balance: data.balance
+            }));
+            return;
+          }
+          
+          // Check if this is a points update from our custom server
+          if (data.wallet && data.points !== undefined) {
+            this.walletHandlers.forEach(handler => handler({
+              wallet: data.wallet,
+              balance: data.points
+            }));
+            return;
+          }
+          
+          // Check if this is a withdrawal notification
+          if (data.type === 'withdrawal_update' && data.userId && data.amount !== undefined && data.status) {
+            this.withdrawalHandlers.forEach(handler => handler({
+              type: data.type,
+              userId: data.userId,
+              amount: data.amount,
+              status: data.status
+            }));
+            return;
+          }
+          
+          // Check if this is a spread update
+          if (data.type === 'spread_update' && data.id && data.buyPrice && data.sellPrice) {
+            this.spreadHandlers.forEach(handler => handler({
+              id: data.id,
+              buyPrice: data.buyPrice,
+              sellPrice: data.sellPrice
+            }));
+            return;
+          }
+          
+          // Otherwise, treat as regular market update
+          this.messageHandlers.forEach(handler => handler(event));
+        } catch (error) {
+          // If can't parse as JSON, pass the raw event to message handlers
+          this.messageHandlers.forEach(handler => handler(event));
+        }
+      };
+    } catch (error) {
+      console.error("Error creating WebSocket connection:", error);
+      this.errorHandlers.forEach(handler => 
+        handler(new ErrorEvent("error", { error, message: "Failed to create WebSocket" }))
+      );
       this.attemptReconnect();
-    };
-    
-    this.socket.onerror = (error) => {
-      console.error('❌ WebSocket error:', error);
-      this.errorHandlers.forEach(handler => handler(error));
-    };
-    
-    this.socket.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        
-        // Check if this is a wallet balance update
-        if (data.type === 'wallet_update' && data.wallet && data.balance !== undefined) {
-          this.walletHandlers.forEach(handler => handler({
-            wallet: data.wallet,
-            balance: data.balance
-          }));
-          return;
-        }
-        
-        // Check if this is a points update from our custom server
-        if (data.wallet && data.points !== undefined) {
-          this.walletHandlers.forEach(handler => handler({
-            wallet: data.wallet,
-            balance: data.points
-          }));
-          return;
-        }
-        
-        // Check if this is a withdrawal notification
-        if (data.type === 'withdrawal_update' && data.userId && data.amount !== undefined && data.status) {
-          this.withdrawalHandlers.forEach(handler => handler({
-            type: data.type,
-            userId: data.userId,
-            amount: data.amount,
-            status: data.status
-          }));
-          return;
-        }
-        
-        // Check if this is a spread update
-        if (data.type === 'spread_update' && data.id && data.buyPrice && data.sellPrice) {
-          this.spreadHandlers.forEach(handler => handler({
-            id: data.id,
-            buyPrice: data.buyPrice,
-            sellPrice: data.sellPrice
-          }));
-          return;
-        }
-        
-        // Otherwise, treat as regular market update
-        this.messageHandlers.forEach(handler => handler(event));
-      } catch (error) {
-        // If can't parse as JSON, pass the raw event to message handlers
-        this.messageHandlers.forEach(handler => handler(event));
-      }
-    };
+    }
   }
   
   private attemptReconnect() {

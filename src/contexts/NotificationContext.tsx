@@ -29,6 +29,20 @@ export const useNotifications = () => {
   return context;
 };
 
+// Helper to detect API base URL based on environment
+const getApiBaseUrl = () => {
+  // If in production, use the same domain
+  if (window.location.hostname !== 'localhost' && !window.location.hostname.includes('127.0.0.1')) {
+    return '';  // Empty string means same domain
+  }
+  
+  // In development, use localhost:3001
+  return 'http://localhost:3001';
+};
+
+// Base API URL for all requests
+const API_BASE_URL = getApiBaseUrl();
+
 export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [settings, setSettings] = useState<NotificationSettings>(() => {
     // Try to load settings from localStorage
@@ -39,11 +53,14 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   // Function to send notification to the backend API for email delivery
   const notifyAdminOfHighExposure = async (marketName: string, exposureAmount: number): Promise<boolean> => {
     if (!settings.emailNotificationsEnabled || exposureAmount < settings.riskThreshold) {
+      console.log(`Notification skipped: ${!settings.emailNotificationsEnabled ? 'emails disabled' : 'below threshold'}`);
       return false; // Don't send notification if disabled or below threshold
     }
 
     try {
-      const response = await fetch('/api/send-alert', {
+      console.log(`Sending high exposure alert for ${marketName} with exposure $${exposureAmount}`);
+      
+      const response = await fetch(`${API_BASE_URL}/api/send-alert`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -61,10 +78,16 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         throw new Error(`API returned status: ${response.status}`);
       }
 
-      console.log(`Email alert sent for high exposure on ${marketName}`);
+      const result = await response.json();
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to send alert');
+      }
+
+      console.log(`✅ Email alert sent for high exposure on ${marketName}`);
       return true;
     } catch (error) {
-      console.error('Failed to send email alert:', error);
+      console.error('❌ Failed to send email alert:', error);
       return false;
     }
   };

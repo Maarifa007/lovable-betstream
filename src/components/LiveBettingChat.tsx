@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { MessageCircle, X, Send } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 
@@ -7,6 +7,24 @@ const LiveBettingChat = () => {
   const [messages, setMessages] = useState<Array<{text: string, sender: "user" | "bot"}>>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState<"connecting" | "connected" | "disconnected">("disconnected");
+
+  useEffect(() => {
+    fetch("/api/chatbot/status")
+      .then(response => {
+        if (response.ok) {
+          setConnectionStatus("connected");
+          console.log("Chatbot API is available");
+        } else {
+          setConnectionStatus("disconnected");
+          console.error("Chatbot API is unavailable");
+        }
+      })
+      .catch(error => {
+        console.error("Error checking chatbot API:", error);
+        setConnectionStatus("disconnected");
+      });
+  }, []);
 
   const fetchLivePrices = async (sport: string) => {
     try {
@@ -109,10 +127,17 @@ const LiveBettingChat = () => {
         }
       } else {
         try {
+          console.log("Sending message to chatbot API:", userMessage);
           const response = await fetch('/api/chatbot', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message: userMessage })
+            body: JSON.stringify({ 
+              message: userMessage,
+              context: {
+                recentMessages: messages.slice(-5),
+                timestamp: new Date().toISOString()
+              }
+            })
           });
           
           if (!response.ok) {
@@ -121,6 +146,7 @@ const LiveBettingChat = () => {
           
           const data = await response.json();
           
+          console.log("Received response from chatbot API:", data);
           setMessages(prev => [...prev, { text: data.response, sender: "bot" }]);
           
         } catch (error) {
@@ -165,7 +191,16 @@ const LiveBettingChat = () => {
       {isOpen && (
         <div className="fixed bottom-24 right-6 bg-card border border-border rounded-lg shadow-lg w-80 sm:w-96 max-h-[32rem] flex flex-col">
           <div className="p-3 border-b border-border flex justify-between items-center">
-            <h2 className="font-semibold">🎲 Live Betting Assistant</h2>
+            <div className="flex items-center">
+              <h2 className="font-semibold">🎲 Live Betting Assistant</h2>
+              {connectionStatus === "connected" ? (
+                <span className="ml-2 w-2 h-2 bg-green-500 rounded-full"></span>
+              ) : connectionStatus === "connecting" ? (
+                <span className="ml-2 w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></span>
+              ) : (
+                <span className="ml-2 w-2 h-2 bg-red-500 rounded-full"></span>
+              )}
+            </div>
             <button 
               onClick={() => setIsOpen(false)}
               className="text-muted-foreground hover:text-foreground"
