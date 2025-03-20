@@ -66,8 +66,14 @@ export const notifyAdminOfHighExposure = async (marketId: number, exposureAmount
   try {
     console.log(`🚨 Sending high exposure alert to admin for market ID ${marketId}`);
     
+    // Define the admin notification endpoint
+    // This can be adjusted based on your deployment environment
+    const notificationEndpoint = process.env.NODE_ENV === 'production' 
+      ? 'https://api.your-production-domain.com/api/admin/notify-exposure'
+      : '/api/admin/notify-exposure';
+    
     // In a real implementation, this would call an API endpoint to send an email
-    const response = await fetch('/api/admin/notify-exposure', {
+    const response = await fetch(notificationEndpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -84,10 +90,24 @@ export const notifyAdminOfHighExposure = async (marketId: number, exposureAmount
       throw new Error('Failed to send admin notification');
     }
     
+    // Show a toast notification when admin alert is sent
+    toast({
+      title: "Admin Alert Sent",
+      description: `Notified administrators about high exposure (${exposureAmount.toLocaleString()}) on market ID ${marketId}`,
+      variant: "default",
+    });
+    
     console.log(`✅ Admin notification sent successfully for market ID ${marketId}`);
     return true;
   } catch (error) {
     console.error("❌ Failed to notify admin:", error);
+    
+    // Show error toast
+    toast({
+      title: "Notification Failed",
+      description: "Unable to send high exposure alert to administrators",
+      variant: "destructive",
+    });
     
     // In case of failure, we still want the app to continue working
     // This is a non-critical operation
