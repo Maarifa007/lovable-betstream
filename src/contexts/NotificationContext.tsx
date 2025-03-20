@@ -46,8 +46,13 @@ const API_BASE_URL = getApiBaseUrl();
 export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [settings, setSettings] = useState<NotificationSettings>(() => {
     // Try to load settings from localStorage
-    const savedSettings = localStorage.getItem('notificationSettings');
-    return savedSettings ? JSON.parse(savedSettings) : defaultSettings;
+    try {
+      const savedSettings = localStorage.getItem('notificationSettings');
+      return savedSettings ? JSON.parse(savedSettings) : defaultSettings;
+    } catch (error) {
+      console.error('Failed to load notification settings:', error);
+      return defaultSettings;
+    }
   });
 
   // Function to send notification to the backend API for email delivery
@@ -58,7 +63,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     }
 
     try {
-      console.log(`Sending high exposure alert for ${marketName} with exposure $${exposureAmount}`);
+      console.log(`🚨 Sending high exposure alert for ${marketName} with exposure $${exposureAmount}`);
       
       const response = await fetch(`${API_BASE_URL}/api/send-alert`, {
         method: 'POST',
@@ -95,7 +100,11 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const updateSettings = (newSettings: Partial<NotificationSettings>) => {
     const updatedSettings = { ...settings, ...newSettings };
     setSettings(updatedSettings);
-    localStorage.setItem('notificationSettings', JSON.stringify(updatedSettings));
+    try {
+      localStorage.setItem('notificationSettings', JSON.stringify(updatedSettings));
+    } catch (error) {
+      console.error('Failed to save notification settings:', error);
+    }
   };
 
   return (

@@ -31,7 +31,7 @@ class WebSocketService {
     const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     
     if (isProd) {
-      // Production environments - use absolute URL from same domain
+      // Production environments - use the same domain with /ws path
       return `${wsProtocol}//${window.location.host}/ws`;
     } else {
       // Development environment
@@ -208,8 +208,11 @@ class WebSocketService {
   send(data: string | ArrayBufferLike | Blob | ArrayBufferView) {
     if (this.socket && this.socket.readyState === WebSocket.OPEN) {
       this.socket.send(data);
+      console.log('✅ Message sent successfully via WebSocket');
     } else {
-      console.error('Cannot send message, socket is not open');
+      console.error('❌ Cannot send message, socket is not open');
+      // Try to reconnect
+      this.connect();
     }
   }
   

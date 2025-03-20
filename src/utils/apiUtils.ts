@@ -25,10 +25,10 @@ export const fetchMarketData = async (sport: string) => {
     // Try primary API first
     console.log(`🔄 Fetching market data for ${sport} from primary API...`);
     const response = await fetch(`${API_BASE_URL}/api/markets/${sport}`);
-    if (!response.ok) throw new Error('Primary API failed');
+    if (!response.ok) throw new Error(`Primary API failed with status: ${response.status}`);
 
     const data = await response.json();
-    if (!Array.isArray(data)) throw new Error('Invalid response format');
+    if (!Array.isArray(data)) throw new Error('Invalid response format from primary API');
     
     console.log(`✅ Successfully fetched data from primary API for ${sport}`);
     return data;
@@ -46,7 +46,7 @@ export const fetchMarketData = async (sport: string) => {
       // Try backup API if primary fails
       console.log(`🔄 Trying backup API for ${sport}...`);
       const fallbackResponse = await fetch(`${API_BASE_URL}/api/backup-markets/${sport}`);
-      if (!fallbackResponse.ok) throw new Error('Backup API also failed');
+      if (!fallbackResponse.ok) throw new Error(`Backup API failed with status: ${fallbackResponse.status}`);
 
       const fallbackData = await fallbackResponse.json();
       console.log(`✅ Successfully fetched data from backup API for ${sport}`);
@@ -228,7 +228,7 @@ export const fetchHistoricalExposure = async (dateRange: 'day' | 'week' | 'month
     // Show error toast
     toast({
       title: "Data Fetch Failed",
-      description: "Unable to load historical exposure data",
+      description: "Unable to load historical exposure data. Using sample data.",
       variant: "destructive",
     });
     
@@ -278,6 +278,12 @@ export const sendAdminAlert = async (
     
     if (!response.ok) {
       throw new Error(`API returned status: ${response.status}`);
+    }
+    
+    const result = await response.json();
+    
+    if (!result.success) {
+      throw new Error(result.error || 'Unknown error sending alert');
     }
     
     console.log(`✅ Successfully sent admin alert`);

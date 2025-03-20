@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { MessageCircle, X, Send } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
@@ -7,22 +8,33 @@ const LiveBettingChat = () => {
   const [messages, setMessages] = useState<Array<{text: string, sender: "user" | "bot"}>>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [connectionStatus, setConnectionStatus] = useState<"connecting" | "connected" | "disconnected">("disconnected");
+  const [connectionStatus, setConnectionStatus] = useState<"connecting" | "connected" | "disconnected">("connecting");
 
   useEffect(() => {
+    // Check if chatbot API is available
     fetch("/api/chatbot/status")
       .then(response => {
         if (response.ok) {
           setConnectionStatus("connected");
-          console.log("Chatbot API is available");
+          console.log("✅ Chatbot API is available");
         } else {
           setConnectionStatus("disconnected");
-          console.error("Chatbot API is unavailable");
+          console.error("❌ Chatbot API is unavailable");
+          toast({
+            title: "Connection Issue",
+            description: "Cannot connect to betting assistant API",
+            variant: "destructive"
+          });
         }
       })
       .catch(error => {
-        console.error("Error checking chatbot API:", error);
+        console.error("❌ Error checking chatbot API:", error);
         setConnectionStatus("disconnected");
+        toast({
+          title: "Connection Error",
+          description: "Failed to reach betting assistant",
+          variant: "destructive"
+        });
       });
   }, []);
 
@@ -33,19 +45,39 @@ const LiveBettingChat = () => {
 
       await new Promise(resolve => setTimeout(resolve, 1500));
       
+      // Try to fetch real data first
+      try {
+        const response = await fetch(`/api/live-prices/${sport}`);
+        
+        if (response.ok) {
+          const data = await response.json();
+          
+          let responseMessage = `📊 Live Prices for ${sport.toUpperCase()}:\n\n`;
+          data.forEach((game: any) => {
+            responseMessage += `${game.market_name}:\nBuy ${game.buy_price} | Sell ${game.sell_price}\n\n`;
+          });
+          
+          setMessages(prev => [...prev, { text: responseMessage, sender: "bot" }]);
+          return;
+        }
+      } catch (error) {
+        console.error("❌ Error fetching real prices:", error);
+      }
+      
+      // Fallback to sample data
       const sampleData = [
         { market_name: `${sport === 'football' ? 'West Ham vs Leicester' : 'Lakers vs Warriors'}`, buy_price: "3.2", sell_price: "2.8" },
         { market_name: `${sport === 'football' ? 'Barcelona vs Real Madrid' : 'Bulls vs Celtics'}`, buy_price: "10.8", sell_price: "10.2" }
       ];
       
-      let response = `📊 Live Prices for ${sport.toUpperCase()}:\n\n`;
+      let response = `📊 Live Prices for ${sport.toUpperCase()} (Sample Data):\n\n`;
       sampleData.forEach(game => {
         response += `${game.market_name}:\nBuy ${game.buy_price} | Sell ${game.sell_price}\n\n`;
       });
 
       setMessages(prev => [...prev, { text: response, sender: "bot" }]);
     } catch (error) {
-      console.error("Error fetching prices:", error);
+      console.error("❌ Error fetching prices:", error);
       setMessages(prev => [...prev, { text: "Error fetching prices. Please try again.", sender: "bot" }]);
       toast({
         title: "Error",
@@ -127,7 +159,7 @@ const LiveBettingChat = () => {
         }
       } else {
         try {
-          console.log("Sending message to chatbot API:", userMessage);
+          console.log("🔄 Sending message to chatbot API:", userMessage);
           const response = await fetch('/api/chatbot', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -146,11 +178,11 @@ const LiveBettingChat = () => {
           
           const data = await response.json();
           
-          console.log("Received response from chatbot API:", data);
+          console.log("✅ Received response from chatbot API:", data);
           setMessages(prev => [...prev, { text: data.response, sender: "bot" }]);
           
         } catch (error) {
-          console.error("Error calling chatbot API:", error);
+          console.error("❌ Error calling chatbot API:", error);
           setMessages(prev => [...prev, { 
             text: "Sorry, I'm having trouble connecting to the betting intelligence API. Please try again later.", 
             sender: "bot" 
@@ -164,7 +196,7 @@ const LiveBettingChat = () => {
         }
       }
     } catch (error) {
-      console.error("Error processing message:", error);
+      console.error("❌ Error processing message:", error);
       setMessages(prev => [...prev, { text: "Error processing your request. Please try again.", sender: "bot" }]);
     } finally {
       setIsLoading(false);
