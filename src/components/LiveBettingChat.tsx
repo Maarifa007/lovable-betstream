@@ -55,68 +55,115 @@ const LiveBettingChat = () => {
     try {
       setIsLoading(true);
       
-      // Process the message - parse commands
-      if (userMessage.startsWith('/buy') || userMessage.startsWith('/sell')) {
-        // Parse commands like "/buy Lakers 100"
-        const parts = userMessage.split(' ');
-        const action = parts[0].substring(1); // "buy" or "sell"
-        const market = parts.length > 2 ? parts[1] : ""; 
-        const amount = parts.length > 2 ? parseInt(parts[2]) : 0;
-        
-        if (!market || isNaN(amount) || amount <= 0) {
+      // Check if it's a command first
+      if (userMessage.startsWith('/')) {
+        // Process commands like before
+        if (userMessage.startsWith('/buy') || userMessage.startsWith('/sell')) {
+          // Parse commands like "/buy Lakers 100"
+          const parts = userMessage.split(' ');
+          const action = parts[0].substring(1); // "buy" or "sell"
+          const market = parts.length > 2 ? parts[1] : ""; 
+          const amount = parts.length > 2 ? parseInt(parts[2]) : 0;
+          
+          if (!market || isNaN(amount) || amount <= 0) {
+            setMessages(prev => [...prev, { 
+              text: "Invalid format. Use '/buy [market] [amount]' or '/sell [market] [amount]'", 
+              sender: "bot" 
+            }]);
+            return;
+          }
+          
+          // Simulate processing a bet
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          
+          // Add a new bet to localStorage for demo purposes
+          const betId = `bet-${Date.now()}`;
+          const bet = {
+            id: betId,
+            matchId: Math.floor(Math.random() * 1000),
+            matchName: market,
+            market: `${market} Points`,
+            betType: action as 'buy' | 'sell',
+            betPrice: action === 'buy' ? 3.2 : 2.8,
+            stakePerPoint: amount,
+            makeupLimit: 30,
+            status: 'open',
+            timestamp: Date.now()
+          };
+          
+          // Store in localStorage for demo
+          const storedBets = localStorage.getItem('userBets');
+          const bets = storedBets ? JSON.parse(storedBets) : [];
+          localStorage.setItem('userBets', JSON.stringify([...bets, bet]));
+          
           setMessages(prev => [...prev, { 
-            text: "Invalid format. Use '/buy [market] [amount]' or '/sell [market] [amount]'", 
+            text: `✅ ${action.toUpperCase()} position opened on ${market} for ${amount} per point`, 
             sender: "bot" 
           }]);
-          return;
+          
+          toast({
+            title: "Position Opened",
+            description: `${action.toUpperCase()} position on ${market} for ${amount} per point`,
+          });
+        } else if (userMessage.toLowerCase() === '/help') {
+          setMessages(prev => [...prev, { 
+            text: "Available commands:\n\n" +
+                  "- /buy [market] [amount]: Buy a market\n" +
+                  "- /sell [market] [amount]: Sell a market\n" +
+                  "- /help: Show this help message", 
+            sender: "bot" 
+          }]);
+        } else {
+          // Generic response for non-command messages
+          setMessages(prev => [...prev, { 
+            text: "I'm your betting assistant. Try using commands like '/buy Lakers 100' or '/sell West Ham 50', or type '/help' for assistance.", 
+            sender: "bot" 
+          }]);
         }
-        
-        // Simulate processing a bet
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        // Add a new bet to localStorage for demo purposes
-        const betId = `bet-${Date.now()}`;
-        const bet = {
-          id: betId,
-          matchId: Math.floor(Math.random() * 1000),
-          matchName: market,
-          market: `${market} Points`,
-          betType: action as 'buy' | 'sell',
-          betPrice: action === 'buy' ? 3.2 : 2.8,
-          stakePerPoint: amount,
-          makeupLimit: 30,
-          status: 'open',
-          timestamp: Date.now()
-        };
-        
-        // Store in localStorage for demo
-        const storedBets = localStorage.getItem('userBets');
-        const bets = storedBets ? JSON.parse(storedBets) : [];
-        localStorage.setItem('userBets', JSON.stringify([...bets, bet]));
-        
-        setMessages(prev => [...prev, { 
-          text: `✅ ${action.toUpperCase()} position opened on ${market} for ${amount} per point`, 
-          sender: "bot" 
-        }]);
-        
-        toast({
-          title: "Position Opened",
-          description: `${action.toUpperCase()} position on ${market} for ${amount} per point`,
-        });
-      } else if (userMessage.toLowerCase() === '/help') {
-        setMessages(prev => [...prev, { 
-          text: "Available commands:\n\n" +
-                "- /buy [market] [amount]: Buy a market\n" +
-                "- /sell [market] [amount]: Sell a market\n" +
-                "- /help: Show this help message", 
-          sender: "bot" 
-        }]);
       } else {
-        // Generic response for non-command messages
-        setMessages(prev => [...prev, { 
-          text: "I'm your betting assistant. Try using commands like '/buy Lakers 100' or '/sell West Ham 50', or type '/help' for assistance.", 
-          sender: "bot" 
-        }]);
+        // NEW: Call AI chatbot API for natural language queries
+        try {
+          // In a real app, this would be a fetch to your /api/chatbot endpoint
+          // const response = await fetch('/api/chatbot', {
+          //   method: 'POST',
+          //   headers: { 'Content-Type': 'application/json' },
+          //   body: JSON.stringify({ message: userMessage })
+          // });
+          // const data = await response.json();
+          
+          // For demo purposes, simulate API response
+          await new Promise(resolve => setTimeout(resolve, 1500));
+          
+          // Generate a context-aware response based on the message
+          let aiResponse = "";
+          const lowerCaseMessage = userMessage.toLowerCase();
+          
+          if (lowerCaseMessage.includes("odds") || lowerCaseMessage.includes("price")) {
+            aiResponse = "Based on current market data, the odds for popular matches are:\n\n" +
+                         "Liverpool vs Chelsea: Buy 2.5 | Sell 2.1 (Total Goals)\n" +
+                         "Lakers vs Warriors: Buy 220.5 | Sell 217.5 (Total Points)\n\n" +
+                         "Would you like me to show you more markets or help you place a bet?";
+          } else if (lowerCaseMessage.includes("trend") || lowerCaseMessage.includes("analysis")) {
+            aiResponse = "📈 Market Trend Analysis:\n\n" +
+                         "Over the past 24 hours, we've seen increasing volume on NBA total points markets, with the average line moving up 3.5 points. European football matches are trending toward lower spreads on total goals markets.\n\n" +
+                         "The most actively traded market right now is Lakers vs Warriors total points.";
+          } else if (lowerCaseMessage.includes("strategy") || lowerCaseMessage.includes("advice")) {
+            aiResponse = "Betting Strategy Insight:\n\n" +
+                         "For spread betting, it's crucial to monitor line movements. Current data suggests value in selling total points in NBA games that have back-to-back scheduling.\n\n" +
+                         "Would you like specific advice for a particular market?";
+          } else {
+            aiResponse = "I'm your AI betting assistant. I can provide market insights, odds information, and betting strategies. Try asking about current odds, market trends, or specific betting strategies. You can also use commands like '/buy Lakers 100' to place bets directly.";
+          }
+          
+          setMessages(prev => [...prev, { text: aiResponse, sender: "bot" }]);
+          
+        } catch (error) {
+          console.error("Error calling chatbot API:", error);
+          setMessages(prev => [...prev, { 
+            text: "Sorry, I'm having trouble connecting to my betting intelligence. Please try again later.", 
+            sender: "bot" 
+          }]);
+        }
       }
     } catch (error) {
       console.error("Error processing message:", error);
@@ -180,7 +227,7 @@ const LiveBettingChat = () => {
           <div className="flex-1 overflow-y-auto p-3 space-y-3 min-h-[300px] max-h-[400px]">
             {messages.length === 0 ? (
               <div className="text-center text-muted-foreground py-6">
-                <p>No messages yet. Try asking for live odds!</p>
+                <p>I'm your AI betting assistant. Ask me about odds, trends, or strategies!</p>
                 <p className="text-sm mt-2">Type /help for available commands</p>
               </div>
             ) : (
@@ -217,7 +264,7 @@ const LiveBettingChat = () => {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Type /buy Lakers 100 or /help"
+                placeholder="Ask about markets or type /help"
                 className="flex-1 bg-background border border-input px-3 py-2 rounded-md focus:outline-none focus:ring-1 focus:ring-ring"
                 disabled={isLoading}
               />

@@ -7,6 +7,7 @@ import AdminRiskAlerts from '@/components/AdminRiskAlerts';
 import AdminSpreadAdjustment from '@/components/AdminSpreadAdjustment';
 import HistoricalExposure from '@/components/HistoricalExposure';
 import Header from '@/components/Header';
+import LiveBettingChat from '@/components/LiveBettingChat';
 import { SpreadsProvider } from '@/contexts/SpreadsContext';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AlertTriangle, BarChart3, History, PanelLeft, Wallet } from "lucide-react";
@@ -98,6 +99,9 @@ const Admin = () => {
             </TabsContent>
           </Tabs>
         </div>
+        
+        {/* Add LiveBettingChat assistant for admin interface */}
+        <LiveBettingChat />
       </div>
     </SpreadsProvider>
   );

@@ -4,6 +4,7 @@ import { AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "@/hooks/use-toast";
 import { calculateSpreadMultiplier } from '@/utils/apiUtils';
+import WebSocketService from '@/services/webSocketService';
 
 interface MarketExposure {
   id: string;
@@ -11,11 +12,113 @@ interface MarketExposure {
   totalExposure: number;
   lastUpdated: string;
   trend: 'up' | 'down' | 'stable';
+  flashing?: boolean;
 }
 
 const AdminRiskDashboard: React.FC = () => {
   const [markets, setMarkets] = useState<MarketExposure[]>([]);
   const [loading, setLoading] = useState(true);
+  const [wsConnected, setWsConnected] = useState(false);
+  
+  // Create WebSocket service instance
+  useEffect(() => {
+    // In production, replace with actual WebSocket URL
+    // const ws = new WebSocketService('wss://your-server.com:8080'); 
+    const ws = new WebSocketService('wss://demo.com:8080'); // Demo for now
+    
+    // Set up WebSocket handlers
+    ws.addOpenHandler(() => {
+      console.log('WebSocket connected for risk dashboard');
+      setWsConnected(true);
+      
+      // For demo, we'll simulate receiving updates
+      const wsUpdateInterval = setInterval(() => {
+        if (markets.length > 0) {
+          const randomIndex = Math.floor(Math.random() * markets.length);
+          const market = {...markets[randomIndex]};
+          
+          // Random exposure change (up or down)
+          const change = Math.floor(Math.random() * 15000) - 5000;
+          market.totalExposure = Math.max(10000, market.totalExposure + change);
+          market.lastUpdated = new Date().toISOString();
+          market.trend = change > 0 ? 'up' : change < 0 ? 'down' : 'stable';
+          
+          // Add flashing effect for significant changes
+          const significantChange = Math.abs(change) > 10000;
+          market.flashing = significantChange;
+          
+          // Update the market in state
+          updateMarket(market);
+          
+          // Show toast for high risk exposure
+          if (market.totalExposure > 80000 && change > 0) {
+            toast({
+              title: "⚠️ High Risk Alert",
+              description: `${market.marketName} exposure has reached $${market.totalExposure.toLocaleString()}`,
+              variant: "destructive",
+            });
+          }
+        }
+      }, 15000); // Every 15 seconds
+      
+      return () => {
+        clearInterval(wsUpdateInterval);
+        ws.disconnect();
+      };
+    });
+    
+    ws.addMessageHandler((event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === 'market_update') {
+          updateMarket({
+            id: data.id,
+            marketName: data.marketName,
+            totalExposure: data.totalExposure,
+            lastUpdated: new Date().toISOString(),
+            trend: data.trend || 'stable',
+            flashing: data.totalExposure > 70000
+          });
+        }
+      } catch (error) {
+        console.error('Error processing WebSocket message:', error);
+      }
+    });
+    
+    ws.connect();
+    
+    return () => {
+      ws.disconnect();
+    };
+  }, []);
+
+  // Update a single market in the state
+  const updateMarket = (updatedMarket: MarketExposure) => {
+    setMarkets(prevMarkets => {
+      const newMarkets = [...prevMarkets];
+      const index = newMarkets.findIndex(m => m.id === updatedMarket.id);
+      
+      if (index !== -1) {
+        newMarkets[index] = updatedMarket;
+        
+        // Remove flashing after 2 seconds
+        if (updatedMarket.flashing) {
+          setTimeout(() => {
+            setMarkets(prev => {
+              const markets = [...prev];
+              const flashingIndex = markets.findIndex(m => m.id === updatedMarket.id);
+              if (flashingIndex !== -1) {
+                markets[flashingIndex] = { ...markets[flashingIndex], flashing: false };
+              }
+              return markets;
+            });
+          }, 2000);
+        }
+      }
+      
+      return newMarkets;
+    });
+  };
   
   // Fetch market exposure data (in a real app, this would be from an API)
   useEffect(() => {
@@ -78,24 +181,21 @@ const AdminRiskDashboard: React.FC = () => {
     };
     
     fetchExposure();
-    
-    // In a real app, you might want to refresh this data periodically
-    const intervalId = setInterval(fetchExposure, 30000);
-    
-    return () => clearInterval(intervalId);
   }, []);
   
   // Get the appropriate color class based on exposure level
-  const getExposureColorClass = (exposure: number) => {
+  const getExposureColorClass = (exposure: number, flashing: boolean = false) => {
     const { level } = calculateSpreadMultiplier(exposure);
+    
+    const baseClass = flashing ? 'animate-pulse ' : '';
     
     switch (level) {
       case 'high':
-        return 'text-red-500 font-bold';
+        return `${baseClass}text-red-500 font-bold`;
       case 'medium':
-        return 'text-yellow-500 font-semibold';
+        return `${baseClass}text-yellow-500 font-semibold`;
       default:
-        return 'text-green-500';
+        return `${baseClass}text-green-500`;
     }
   };
   
@@ -119,8 +219,11 @@ const AdminRiskDashboard: React.FC = () => {
     <div className="p-6 rounded-lg glass">
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-xl font-bold">Market Risk Exposure</h2>
-        <div className="text-sm text-muted-foreground">
-          Last updated: {new Date().toLocaleTimeString()}
+        <div className="flex items-center gap-2">
+          <div className={`h-2 w-2 rounded-full ${wsConnected ? 'bg-green-500' : 'bg-red-500'}`}></div>
+          <div className="text-sm text-muted-foreground">
+            {wsConnected ? 'Live updates active' : 'Connecting...'} • Last updated: {new Date().toLocaleTimeString()}
+          </div>
         </div>
       </div>
       
@@ -146,9 +249,12 @@ const AdminRiskDashboard: React.FC = () => {
             const { level } = calculateSpreadMultiplier(market.totalExposure);
             
             return (
-              <TableRow key={market.id}>
+              <TableRow 
+                key={market.id} 
+                className={market.flashing ? 'bg-red-500/5' : undefined}
+              >
                 <TableCell className="font-medium">{market.marketName}</TableCell>
-                <TableCell className={`text-right ${getExposureColorClass(market.totalExposure)}`}>
+                <TableCell className={`text-right ${getExposureColorClass(market.totalExposure, market.flashing)}`}>
                   ${market.totalExposure.toLocaleString()}
                 </TableCell>
                 <TableCell className="text-right">
@@ -156,7 +262,7 @@ const AdminRiskDashboard: React.FC = () => {
                     level === 'high' ? 'bg-red-500/20 text-red-500' : 
                     level === 'medium' ? 'bg-yellow-500/20 text-yellow-500' : 
                     'bg-green-500/20 text-green-500'
-                  }`}>
+                  } ${market.flashing ? 'animate-pulse' : ''}`}>
                     {level.charAt(0).toUpperCase() + level.slice(1)}
                   </span>
                 </TableCell>
