@@ -1,6 +1,7 @@
 
 import React, { useState } from "react";
 import { toast } from "@/hooks/use-toast";
+import { calculateRequiredCollateral, lockCollateral, hasSufficientBalance } from "@/services/accountService";
 
 interface NewPositionModalProps {
   isOpen: boolean;
@@ -14,6 +15,8 @@ interface NewPositionModalProps {
     buyPrice: string;
   };
   action?: 'buy' | 'sell';
+  userWallet?: string;
+  currentBalance?: number;
 }
 
 interface Bet {
@@ -27,45 +30,102 @@ interface Bet {
   makeupLimit: number;
   status: 'open' | 'settled';
   timestamp: number;
+  collateralHeld: number;
+  userId: string;
 }
 
-const NewPositionModal = ({ isOpen, onClose, match, action }: NewPositionModalProps) => {
+const NewPositionModal = ({ 
+  isOpen, 
+  onClose, 
+  match, 
+  action,
+  userWallet = "default-wallet", 
+  currentBalance = 10000
+}: NewPositionModalProps) => {
   const [stakePerPoint, setStakePerPoint] = useState<number>(10);
   const [makeupLimit, setMakeupLimit] = useState<number>(30); // Default 30X makeup
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
   if (!isOpen || !match) return null;
 
   const price = action === 'buy' ? match.buyPrice : match.sellPrice;
   const totalExposure = stakePerPoint * makeupLimit;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsSubmitting(true);
     
-    // Create a bet object
-    const bet: Bet = {
-      id: `bet-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      matchId: match.id,
-      matchName: `${match.home} vs ${match.away}`,
-      market: match.market,
-      betType: action || 'buy',
-      betPrice: parseFloat(price),
-      stakePerPoint,
-      makeupLimit,
-      status: 'open',
-      timestamp: Date.now(),
-    };
-    
-    // Store bet in localStorage for now (in a real app, this would be sent to a backend)
-    const existingBets = JSON.parse(localStorage.getItem('userBets') || '[]');
-    localStorage.setItem('userBets', JSON.stringify([...existingBets, bet]));
-    
-    // Show toast notification
-    toast({
-      title: "Position Opened",
-      description: `${action === 'buy' ? 'Bought' : 'Sold'} ${match.market} at ${price} with $${stakePerPoint} per point`,
-    });
-    
-    onClose();
+    try {
+      // Calculate required collateral
+      const requiredCollateral = calculateRequiredCollateral(stakePerPoint, makeupLimit);
+      
+      // Check if user has sufficient balance
+      const hasSufficient = await hasSufficientBalance(userWallet, requiredCollateral);
+      
+      if (!hasSufficient) {
+        toast({
+          title: "Insufficient Balance",
+          description: `You need $${requiredCollateral.toLocaleString()} for this position, but your balance is only $${currentBalance.toLocaleString()}.`,
+          variant: "destructive",
+        });
+        setIsSubmitting(false);
+        return;
+      }
+      
+      // Create a bet ID
+      const betId = `bet-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      
+      // Lock the collateral
+      const collateralLocked = await lockCollateral(userWallet, requiredCollateral, betId);
+      
+      if (!collateralLocked) {
+        toast({
+          title: "Position Failed",
+          description: "Unable to lock collateral for this position.",
+          variant: "destructive",
+        });
+        setIsSubmitting(false);
+        return;
+      }
+      
+      // Create a bet object
+      const bet: Bet = {
+        id: betId,
+        matchId: match.id,
+        matchName: `${match.home} vs ${match.away}`,
+        market: match.market,
+        betType: action || 'buy',
+        betPrice: parseFloat(price),
+        stakePerPoint,
+        makeupLimit,
+        status: 'open',
+        timestamp: Date.now(),
+        collateralHeld: requiredCollateral,
+        userId: userWallet
+      };
+      
+      // Store bet in localStorage for now (in a real app, this would be sent to a backend)
+      const existingBets = JSON.parse(localStorage.getItem('userBets') || '[]');
+      localStorage.setItem('userBets', JSON.stringify([...existingBets, bet]));
+      
+      // Show toast notification
+      toast({
+        title: "Position Opened",
+        description: `${action === 'buy' ? 'Bought' : 'Sold'} ${match.market} at ${price} with $${stakePerPoint} per point. $${requiredCollateral} held as collateral.`,
+      });
+      
+      onClose();
+    } catch (error) {
+      console.error("Error submitting position:", error);
+      
+      toast({
+        title: "Position Error",
+        description: "Failed to open position. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -123,7 +183,7 @@ const NewPositionModal = ({ isOpen, onClose, match, action }: NewPositionModalPr
             <div className="space-y-2">
               <label className="text-sm">Makeup Limit (default: 30X)</label>
               <div className="grid grid-cols-3 gap-2">
-                {[10, 15, 20, 25, 30].map((limit) => (
+                {[10, 20, 30, 40].map((limit) => (
                   <button 
                     key={limit}
                     type="button"
@@ -147,13 +207,19 @@ const NewPositionModal = ({ isOpen, onClose, match, action }: NewPositionModalPr
           
           <button 
             type="submit"
+            disabled={isSubmitting}
             className={`w-full p-3 rounded-lg transition-colors ${
-              action === 'buy' 
-                ? 'bg-primary text-primary-foreground hover:bg-primary/90' 
-                : 'bg-destructive text-destructive-foreground hover:bg-destructive/90'
+              isSubmitting 
+                ? 'bg-gray-600 text-gray-300 cursor-not-allowed' 
+                : action === 'buy' 
+                  ? 'bg-primary text-primary-foreground hover:bg-primary/90' 
+                  : 'bg-destructive text-destructive-foreground hover:bg-destructive/90'
             }`}
           >
-            Confirm {action === 'buy' ? 'Buy' : 'Sell'}
+            {isSubmitting 
+              ? 'Processing...' 
+              : `Confirm ${action === 'buy' ? 'Buy' : 'Sell'}`
+            }
           </button>
         </form>
       </div>

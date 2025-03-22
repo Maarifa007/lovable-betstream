@@ -1,22 +1,31 @@
 
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import { checkAndGradeFinishedEvents, setupScheduledGrading } from '@/services/eventGradingService';
 
 interface NotificationSettings {
   emailNotificationsEnabled: boolean;
   riskThreshold: number;
   recipientEmails: string[];
+  autoGradingEnabled: boolean;
+  gradingIntervalMinutes: number;
 }
 
 interface NotificationContextType {
   settings: NotificationSettings;
   updateSettings: (newSettings: Partial<NotificationSettings>) => void;
   notifyAdminOfHighExposure: (marketName: string, exposureAmount: number) => Promise<boolean>;
+  startScheduledGrading: () => void;
+  stopScheduledGrading: () => void;
+  isGradingActive: boolean;
+  manuallyGradeEvents: () => Promise<string[]>;
 }
 
 const defaultSettings: NotificationSettings = {
   emailNotificationsEnabled: true,
   riskThreshold: 50000,
   recipientEmails: ['admin@yourbettingapp.com'],
+  autoGradingEnabled: true,
+  gradingIntervalMinutes: 15
 };
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
@@ -54,6 +63,23 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       return defaultSettings;
     }
   });
+  
+  const [gradingIntervalId, setGradingIntervalId] = useState<number | null>(null);
+  const [isGradingActive, setIsGradingActive] = useState<boolean>(false);
+
+  // Start scheduled grading on initial load if autoGradingEnabled is true
+  useEffect(() => {
+    if (settings.autoGradingEnabled) {
+      startScheduledGrading();
+    }
+    
+    // Cleanup on unmount
+    return () => {
+      if (gradingIntervalId !== null) {
+        window.clearInterval(gradingIntervalId);
+      }
+    };
+  }, []);
 
   // Function to send notification to the backend API for email delivery
   const notifyAdminOfHighExposure = async (marketName: string, exposureAmount: number): Promise<boolean> => {
@@ -97,18 +123,78 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     }
   };
 
+  // Start scheduled grading process
+  const startScheduledGrading = () => {
+    if (gradingIntervalId !== null) {
+      window.clearInterval(gradingIntervalId);
+    }
+    
+    const intervalId = setupScheduledGrading(settings.gradingIntervalMinutes);
+    setGradingIntervalId(intervalId);
+    setIsGradingActive(true);
+    
+    console.log(`✅ Scheduled grading started with interval of ${settings.gradingIntervalMinutes} minutes`);
+  };
+  
+  // Stop scheduled grading process
+  const stopScheduledGrading = () => {
+    if (gradingIntervalId !== null) {
+      window.clearInterval(gradingIntervalId);
+      setGradingIntervalId(null);
+      setIsGradingActive(false);
+      
+      console.log('❌ Scheduled grading stopped');
+    }
+  };
+  
+  // Manually trigger event grading
+  const manuallyGradeEvents = async (): Promise<string[]> => {
+    console.log('🔄 Manually triggering event grading...');
+    return await checkAndGradeFinishedEvents();
+  };
+
   const updateSettings = (newSettings: Partial<NotificationSettings>) => {
     const updatedSettings = { ...settings, ...newSettings };
     setSettings(updatedSettings);
+    
     try {
       localStorage.setItem('notificationSettings', JSON.stringify(updatedSettings));
+      
+      // If grading interval changed and grading is active, restart with new interval
+      if (
+        newSettings.gradingIntervalMinutes !== undefined && 
+        newSettings.gradingIntervalMinutes !== settings.gradingIntervalMinutes &&
+        isGradingActive
+      ) {
+        stopScheduledGrading();
+        startScheduledGrading();
+      }
+      
+      // If auto grading setting changed, start or stop accordingly
+      if (newSettings.autoGradingEnabled !== undefined) {
+        if (newSettings.autoGradingEnabled && !isGradingActive) {
+          startScheduledGrading();
+        } else if (!newSettings.autoGradingEnabled && isGradingActive) {
+          stopScheduledGrading();
+        }
+      }
     } catch (error) {
       console.error('Failed to save notification settings:', error);
     }
   };
 
   return (
-    <NotificationContext.Provider value={{ settings, updateSettings, notifyAdminOfHighExposure }}>
+    <NotificationContext.Provider 
+      value={{ 
+        settings, 
+        updateSettings, 
+        notifyAdminOfHighExposure,
+        startScheduledGrading,
+        stopScheduledGrading,
+        isGradingActive,
+        manuallyGradeEvents
+      }}
+    >
       {children}
     </NotificationContext.Provider>
   );
