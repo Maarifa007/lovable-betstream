@@ -7,18 +7,24 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Index from "./pages/Index";
 import Admin from "./pages/Admin";
 import NotFound from "./pages/NotFound";
+import LandingPage from "./pages/LandingPage";
+import ChatPage from "./pages/ChatPage";
+import { Helmet } from "react-helmet";
 
 // Create a new QueryClient instance
 const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
+    <Helmet defaultTitle="BetStream - AI-Powered Sports Trading" />
     <TooltipProvider>
       <Toaster />
       <Sonner />
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<Index />} />
+          <Route path="/" element={<LandingPage />} />
+          <Route path="/app" element={<Index />} />
+          <Route path="/chat" element={<ChatPage />} />
           <Route path="/admin" element={<Admin />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />

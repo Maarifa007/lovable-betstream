@@ -3,14 +3,16 @@ import { Trophy, DollarSign } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import LiveBalance from "./LiveBalance";
 import WebSocketService from "@/services/webSocketService";
+import { AccountType } from "@/utils/betUtils";
 
 interface HeaderProps {
   walletBalance: number;
   onOpenWalletModal: () => void;
   onOpenNewPositionModal?: () => void;
   userWallet: string;
-  webSocketService?: WebSocketService;
+  webSocketService?: WebSocketService | null;
   onBalanceUpdate?: (newBalance: number) => void;
+  accountType?: AccountType;
 }
 
 const Header = ({ 
@@ -19,7 +21,8 @@ const Header = ({
   onOpenNewPositionModal,
   userWallet,
   webSocketService,
-  onBalanceUpdate 
+  onBalanceUpdate,
+  accountType = 'free'
 }: HeaderProps) => {
   const handleNewPosition = () => {
     if (onOpenNewPositionModal) {
@@ -53,6 +56,12 @@ const Header = ({
               walletBalance.toLocaleString()
             )}
           </span>
+          {accountType === 'free' && (
+            <span className="text-xs ml-1 bg-yellow-500 text-black px-2 py-0.5 rounded-full">Gold</span>
+          )}
+          {accountType === 'cash' && (
+            <span className="text-xs ml-1 bg-green-500 text-black px-2 py-0.5 rounded-full">USDC</span>
+          )}
         </button>
         <button 
           onClick={handleNewPosition}
