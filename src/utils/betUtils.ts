@@ -153,7 +153,7 @@ export const cancelBet = (betId: string): Bet[] => {
   const bets = getUserBets();
   const updatedBets = bets.map(bet => 
     bet.id === betId && bet.status === 'open' 
-      ? { ...bet, status: 'cancelled' } 
+      ? { ...bet, status: 'cancelled' as const } 
       : bet
   );
   saveBets(updatedBets);
