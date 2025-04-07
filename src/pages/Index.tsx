@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import WebSocketService from "@/services/webSocketService";
@@ -49,31 +48,25 @@ const Index = () => {
   const priceRefs = useRef<Record<string, HTMLDivElement>>({});
   const queryClient = useQueryClient();
 
-  // Check if user has selected account type yet
   useEffect(() => {
-    // Get user account
     const account = getUserAccount(USER_WALLET_ADDRESS);
     setAccountType(account.accountType);
     setVirtualBalance(account.virtualBalance);
     setWalletBalance(account.walletBalance);
     
-    // Check if account has been chosen
     const hasChosenAccount = localStorage.getItem(`account_chosen_${USER_WALLET_ADDRESS}`);
     
-    // If they haven't chosen an account type and just opened the app, show wallet modal with account selection
     if (!hasChosenAccount) {
       setShowAccountSelection(true);
       setIsWalletModalOpen(true);
     }
     
-    // Listen for wallet modal open requests from LiveBettingChat
     const handleOpenWalletModal = () => {
       setIsWalletModalOpen(true);
     };
     
     window.addEventListener('openWalletModal', handleOpenWalletModal);
     
-    // Simulate loading application data
     setTimeout(() => {
       setIsAppLoading(false);
     }, 1500);
@@ -83,7 +76,6 @@ const Index = () => {
     };
   }, []);
 
-  // Create a debounced market update function to reduce unnecessary re-renders
   const debouncedUpdateMarkets = useRef(
     debounce((updates: any[]) => {
       console.log(`Applying batch update for ${updates.length} markets`);
@@ -103,7 +95,6 @@ const Index = () => {
         return updatedMatches;
       });
       
-      // Flash the updated price elements
       updates.forEach(update => {
         if (priceRefs.current[`${update.id}-sellPrice`]) {
           priceRefs.current[`${update.id}-sellPrice`].classList.add('flash-update');
@@ -122,13 +113,10 @@ const Index = () => {
     }, 500)
   ).current;
 
-  // Handler for balance updates with API call
   const handleBalanceUpdate = async (newBalance: number) => {
     try {
-      // Update user account
       const account = getUserAccount(USER_WALLET_ADDRESS);
       
-      // Update appropriate balance based on account type
       if (account.accountType === 'free') {
         account.virtualBalance = newBalance;
         setVirtualBalance(newBalance);
@@ -137,10 +125,8 @@ const Index = () => {
         setWalletBalance(newBalance);
       }
       
-      // Save updated account
       localStorage.setItem(`userAccount_${USER_WALLET_ADDRESS}`, JSON.stringify(account));
       
-      // Update UI state for the active balance display
       const displayBalance = account.accountType === 'free' ? account.virtualBalance : account.walletBalance;
       
       toast({
@@ -157,26 +143,22 @@ const Index = () => {
     }
   };
 
-  // Fetch initial market data with improved error handling and fallback
   const { data: initialMarkets, isLoading, error } = useQuery({
     queryKey: ['markets', selectedSport],
     queryFn: async () => fetchMarketData(selectedSport),
-    retry: 3, // Retry up to 3 times if the API call fails
-    retryDelay: attemptIndex => Math.min(1000 * 2 ** attemptIndex, 30000), // Exponential retry delay
-    enabled: !isAppLoading // Only start fetching after initial app loading is complete
+    retry: 3,
+    retryDelay: attemptIndex => Math.min(1000 * 2 ** attemptIndex, 30000),
+    enabled: !isAppLoading
   });
 
   useEffect(() => {
-    // Set initial markets
     if (initialMarkets) {
       setLiveMatches(initialMarkets);
     }
 
-    // WebSocket connection for live updates with enhanced logging and event handling
     if (!wsRef.current) {
       wsRef.current = new WebSocketService('wss://stream.your-service.com/markets');
       
-      // Add open handler for successful connections
       wsRef.current.addOpenHandler(() => {
         console.log("✅ WebSocket connected successfully.");
         toast({
@@ -186,15 +168,13 @@ const Index = () => {
         });
       });
       
-      // Add error handler for WebSocket errors
       wsRef.current.addErrorHandler((error) => {
         console.error("❌ WebSocket encountered an error:", error);
       });
       
-      // Add close handler for disconnect events
       wsRef.current.addCloseHandler((event) => {
         console.warn("⚠️ WebSocket disconnected. Attempting to reconnect...");
-        if (event.code !== 1000) { // Not a normal closure
+        if (event.code !== 1000) {
           toast({
             title: "Connection Lost",
             description: "Attempting to reconnect to live updates...",
@@ -203,28 +183,23 @@ const Index = () => {
         }
       });
       
-      // Add message handler to update markets in real-time with batch processing
       wsRef.current.addMessageHandler((event) => {
         try {
           const data = JSON.parse(event.data);
           
-          // Handle individual market updates (legacy support)
           if (data.type === 'market_update' && data.id) {
             console.log(`📊 Received market update for ${data.id}:`, data);
             debouncedUpdateMarkets([data]);
           }
           
-          // Handle batch updates for improved performance
           if (data.type === 'market_updates' && Array.isArray(data.updates)) {
             console.log(`📊 Batch update received for ${data.updates.length} markets.`);
             debouncedUpdateMarkets(data.updates);
           }
           
-          // Handle account balance updates
           if (data.type === 'balance_update' && data.userId === USER_WALLET_ADDRESS) {
             console.log(`💰 Received balance update:`, data);
             
-            // Update the appropriate balance based on account type
             const account = getUserAccount(USER_WALLET_ADDRESS);
             if (data.accountType === 'free') {
               setVirtualBalance(data.balance);
@@ -241,13 +216,11 @@ const Index = () => {
         }
       });
       
-      // Initialize WebSocket connection
       wsRef.current.connect();
     }
 
-    // Cleanup WebSocket on unmount
     return () => {
-      debouncedUpdateMarkets.cancel(); // Cancel any pending debounced updates
+      debouncedUpdateMarkets.cancel();
       if (wsRef.current) {
         wsRef.current.disconnect();
         wsRef.current = null;
@@ -255,9 +228,7 @@ const Index = () => {
     };
   }, [initialMarkets, queryClient, selectedSport, debouncedUpdateMarkets]);
 
-  // Check for account updates
   useEffect(() => {
-    // Set up interval to check for account updates
     const intervalId = setInterval(() => {
       const account = getUserAccount(USER_WALLET_ADDRESS);
       
@@ -283,7 +254,6 @@ const Index = () => {
     setIsNewPositionModalOpen(true);
   };
 
-  // Determine which balance to display based on account type
   const displayBalance = accountType === 'free' ? virtualBalance : walletBalance;
 
   if (isAppLoading) {
@@ -301,7 +271,6 @@ const Index = () => {
   return (
     <SpreadsProvider>
       <div className="min-h-screen bg-background text-foreground overflow-hidden">
-        {/* Header */}
         <Header 
           walletBalance={displayBalance}
           onOpenWalletModal={() => setIsWalletModalOpen(true)}
@@ -312,15 +281,12 @@ const Index = () => {
           accountType={accountType}
         />
 
-        {/* Main Content - IG Index Style */}
         <div className="flex h-[calc(100vh-64px)]">
-          {/* Left Sidebar */}
           <Sidebar 
             selectedSport={selectedSport}
             onSelectSport={setSelectedSport}
           />
           
-          {/* Main Market View */}
           <MarketView 
             matches={liveMatches}
             isLoading={isLoading}
@@ -329,27 +295,22 @@ const Index = () => {
             priceRefs={priceRefs}
           />
           
-          {/* Right Bet Slip Panel */}
           <BetSlip />
         </div>
         
-        {/* Live Betting Chat */}
         <LiveBettingChat />
         
-        {/* Modals */}
         <WalletModal 
           isOpen={isWalletModalOpen} 
           onClose={() => {
             setIsWalletModalOpen(false);
-            // Record that the user has selected an account type
             localStorage.setItem(`account_chosen_${USER_WALLET_ADDRESS}`, "true");
           }}
           balance={displayBalance}
           userWallet={USER_WALLET_ADDRESS}
           webSocketService={wsRef.current}
-          showAccountSelection={showAccountSelection}
+          accountSelection={showAccountSelection}
           onAccountTypeSelected={() => {
-            // When user selects account type, record it and close modal
             localStorage.setItem(`account_chosen_${USER_WALLET_ADDRESS}`, "true");
             setShowAccountSelection(false);
           }}
