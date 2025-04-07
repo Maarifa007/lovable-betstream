@@ -15,7 +15,6 @@ import { fetchMarketData } from "@/utils/apiUtils";
 import { debounce } from "lodash";
 import { getUserAccount, AccountType } from "@/utils/betUtils";
 
-// Type definitions
 interface Market {
   id: number;
   home: string;
@@ -28,8 +27,7 @@ interface Market {
   updatedFields?: string[];
 }
 
-// User wallet address for wallet updates
-const USER_WALLET_ADDRESS = "0x1234...5678"; // This would be from authentication in a real app
+const USER_WALLET_ADDRESS = "0x1234...5678";
 
 const Index = () => {
   const [selectedSport, setSelectedSport] = useState("football");

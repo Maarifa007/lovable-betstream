@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { Wallet, Plus, ArrowRight, ExternalLink, DollarSign, Loader, ShieldCheck, Coins, Zap } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
@@ -16,9 +15,11 @@ interface WalletModalProps {
   balance: number;
   userWallet: string;
   webSocketService?: WebSocketService;
+  accountSelection?: boolean;
+  onAccountTypeSelected?: () => void;
 }
 
-const WalletModal = ({ isOpen, onClose, balance, userWallet, webSocketService }: WalletModalProps) => {
+const WalletModal = ({ isOpen, onClose, balance, userWallet, webSocketService, accountSelection, onAccountTypeSelected }: WalletModalProps) => {
   const [isLoading, setIsLoading] = useState(true);
   const [kycVerified, setKycVerified] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
