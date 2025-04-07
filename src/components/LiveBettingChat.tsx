@@ -4,14 +4,12 @@ import { MessageCircle, X, Send, Wallet, Loader } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { 
   getUserBets, 
-  partiallyCloseBet, 
-  fullyCloseBet, 
-  findBetByName,
   getUserAccount,
   shouldPromptUpgrade,
-  markUpgradePrompt,
-  placeBet
+  markUpgradePrompt
 } from "@/utils/betUtils";
+import { mockPlaceTradeEndpoint, mockClosePositionEndpoint } from "@/utils/tradeApi";
+import marketScraper from "@/services/marketScraperService";
 
 // Default user wallet address - in real app this would come from auth
 const USER_WALLET_ADDRESS = "0x1234...5678";
@@ -23,6 +21,7 @@ const LiveBettingChat = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<"connecting" | "connected" | "disconnected">("connecting");
   const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
+  const [tradeContext, setTradeContext] = useState<any>(null);
 
   useEffect(() => {
     // Check if chatbot API is available
@@ -53,7 +52,7 @@ const LiveBettingChat = () => {
       
     // Add initial welcome message from Mikey
     setMessages([{
-      text: "👋 Hi! I'm Mikey, your AI betting assistant. I can help you place bets, check odds, or close positions. Try commands like:\n\n• 'Show NBA spreads'\n• 'Buy Lakers at 5.5 for $10/pt'\n• 'Close my Warriors bet'\n• 'Close 50% of my Lakers bet'\n\nType /help for more commands.",
+      text: "👋 Hi! I'm Mikey, your AI betting assistant. I can help you place bets, check odds, or close positions. Try commands like:\n\n• 'Show NBA spreads'\n• 'Buy Lakers at 5.5 for $10/pt'\n• 'Close my Warriors bet'\n• 'Close 50% of my Lakers bet'\n• 'Bet live on Barcelona'\n\nType /help for more commands.",
       sender: "bot"
     }]);
     
@@ -101,39 +100,32 @@ const LiveBettingChat = () => {
       setIsLoading(true);
       setMessages(prev => [...prev, { text: `Fetching live prices for ${sport}...`, sender: "bot" }]);
 
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      // Try to fetch real data first
+      // Use the market scraper service
       try {
-        const response = await fetch(`/api/live-prices/${sport}`);
+        const markets = await marketScraper.fetchMarkets(sport as any);
         
-        if (response.ok) {
-          const data = await response.json();
-          
-          let responseMessage = `📊 Live Prices for ${sport.toUpperCase()}:\n\n`;
-          data.forEach((game: any) => {
-            responseMessage += `${game.market_name}:\nBuy ${game.buy_price} | Sell ${game.sell_price}\n\n`;
-          });
-          
-          setMessages(prev => [...prev, { text: responseMessage, sender: "bot" }]);
-          return;
-        }
+        let responseMessage = `📊 Live Prices for ${sport.toUpperCase()}:\n\n`;
+        markets.forEach(game => {
+          responseMessage += `${game.match}:\nBuy ${game.buyPrice.toFixed(2)} | Sell ${game.sellPrice.toFixed(2)}\n\n`;
+        });
+        
+        setMessages(prev => [...prev, { text: responseMessage, sender: "bot" }]);
       } catch (error) {
-        console.error("❌ Error fetching real prices:", error);
-      }
-      
-      // Fallback to sample data
-      const sampleData = [
-        { market_name: `${sport === 'football' ? 'West Ham vs Leicester' : 'Lakers vs Warriors'}`, buy_price: "3.2", sell_price: "2.8" },
-        { market_name: `${sport === 'football' ? 'Barcelona vs Real Madrid' : 'Bulls vs Celtics'}`, buy_price: "10.8", sell_price: "10.2" }
-      ];
-      
-      let response = `📊 Live Prices for ${sport.toUpperCase()} (Sample Data):\n\n`;
-      sampleData.forEach(game => {
-        response += `${game.market_name}:\nBuy ${game.buy_price} | Sell ${game.sell_price}\n\n`;
-      });
+        console.error("❌ Error fetching market data:", error);
+        
+        // Fallback to sample data
+        const sampleData = [
+          { market_name: `${sport === 'football' ? 'West Ham vs Leicester' : 'Lakers vs Warriors'}`, buy_price: "3.2", sell_price: "2.8" },
+          { market_name: `${sport === 'football' ? 'Barcelona vs Real Madrid' : 'Bulls vs Celtics'}`, buy_price: "10.8", sell_price: "10.2" }
+        ];
+        
+        let response = `📊 Live Prices for ${sport.toUpperCase()} (Sample Data):\n\n`;
+        sampleData.forEach(game => {
+          response += `${game.market_name}:\nBuy ${game.buy_price} | Sell ${game.sell_price}\n\n`;
+        });
 
-      setMessages(prev => [...prev, { text: response, sender: "bot" }]);
+        setMessages(prev => [...prev, { text: response, sender: "bot" }]);
+      }
     } catch (error) {
       console.error("❌ Error fetching prices:", error);
       setMessages(prev => [...prev, { text: "Error fetching prices. Please try again.", sender: "bot" }]);
@@ -142,6 +134,106 @@ const LiveBettingChat = () => {
         description: "Failed to fetch live prices",
         variant: "destructive"
       });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleFetchLivePrice = async (matchName: string) => {
+    try {
+      setIsLoading(true);
+      setMessages(prev => [...prev, { text: `Getting live price for ${matchName}...`, sender: "bot" }]);
+      
+      // Guess the sport based on the match name
+      const sportKeywords = {
+        football: ['united', 'fc', 'city', 'arsenal', 'chelsea', 'liverpool', 'madrid', 'barcelona'],
+        basketball: ['lakers', 'bulls', 'warriors', 'celtics', 'heat', 'knicks', 'bucks'],
+        tennis: ['djokovic', 'nadal', 'federer', 'murray', 'williams', 'osaka'],
+        golf: ['woods', 'mcilroy', 'masters', 'open', 'championship', 'pga']
+      };
+      
+      const normalizedMatch = matchName.toLowerCase();
+      let sport: string = 'football';
+      
+      for (const [sportName, keywords] of Object.entries(sportKeywords)) {
+        for (const keyword of keywords) {
+          if (normalizedMatch.includes(keyword)) {
+            sport = sportName;
+            break;
+          }
+        }
+      }
+      
+      // Fetch live prices from the market scraper
+      const markets = await marketScraper.fetchMarkets(sport as any);
+      
+      // Find a match that contains the requested match name
+      const matchedMarket = markets.find(market => 
+        market.match.toLowerCase().includes(normalizedMatch)
+      );
+      
+      if (matchedMarket) {
+        // Got a match, display the live price
+        const responseMessage = `Live price for ${matchedMarket.match}:\n` +
+                                `Buy: ${matchedMarket.buyPrice.toFixed(2)} / Sell: ${matchedMarket.sellPrice.toFixed(2)}\n\n` +
+                                `Would you like to place a trade? Reply with:\n` +
+                                `"Buy ${matchName} for [stake]/pt" or\n` +
+                                `"Sell ${matchName} for [stake]/pt"`;
+        
+        setMessages(prev => [...prev, { 
+          text: responseMessage, 
+          sender: "bot",
+          confirmationData: {
+            action: "priceQuote",
+            matchName: matchedMarket.match,
+            buyPrice: matchedMarket.buyPrice,
+            sellPrice: matchedMarket.sellPrice
+          }
+        }]);
+        
+        // Set trade context for easier follow-up
+        setTradeContext({
+          matchName: matchedMarket.match,
+          matchId: Math.floor(Math.random() * 10000).toString(),
+          buyPrice: matchedMarket.buyPrice,
+          sellPrice: matchedMarket.sellPrice
+        });
+      } else {
+        // No match found, use sample data
+        const buyPrice = 3.2 + (Math.random() * 0.4 - 0.2);
+        const sellPrice = buyPrice - 0.4;
+        
+        const responseMessage = `Live price for ${matchName} (Sample Data):\n` +
+                               `Buy: ${buyPrice.toFixed(2)} / Sell: ${sellPrice.toFixed(2)}\n\n` +
+                               `Would you like to place a trade? Reply with:\n` +
+                               `"Buy ${matchName} for [stake]/pt" or\n` +
+                               `"Sell ${matchName} for [stake]/pt"`;
+        
+        setMessages(prev => [...prev, { 
+          text: responseMessage, 
+          sender: "bot",
+          confirmationData: {
+            action: "priceQuote",
+            matchName: matchName,
+            buyPrice: buyPrice,
+            sellPrice: sellPrice
+          }
+        }]);
+        
+        // Set trade context for easier follow-up
+        setTradeContext({
+          matchName: matchName,
+          matchId: Math.floor(Math.random() * 10000).toString(),
+          buyPrice: buyPrice,
+          sellPrice: sellPrice
+        });
+      }
+    } catch (error) {
+      console.error("❌ Error fetching live price:", error);
+      setMessages(prev => [...prev, { 
+        text: "Sorry, I couldn't fetch the live price for that market. Please try another market or try again later.", 
+        sender: "bot" 
+      }]);
     } finally {
       setIsLoading(false);
     }
@@ -164,60 +256,145 @@ const LiveBettingChat = () => {
       
       const percentageStr = match[1];
       const betName = match[2].trim();
-      const percentage = percentageStr ? parseInt(percentageStr) : 100; // Default to 100% if no percentage specified
+      const percentage = percentageStr ? parseInt(percentageStr) / 100 : 1.0; // Convert to decimal (0.5 for 50%)
       
-      // Find the bet
-      const matchingBets = findBetByName(betName);
+      // Prepare the API request
+      const request = {
+        body: {
+          userId: USER_WALLET_ADDRESS,
+          matchName: betName,
+          percentageToClose: percentage
+        }
+      };
       
-      if (matchingBets.length === 0) {
+      // Call the mock API endpoint
+      const response = await mockClosePositionEndpoint(request);
+      
+      if (response.status !== 200 || !response.json.success) {
         setMessages(prev => [...prev, { 
-          text: `I couldn't find any open positions matching "${betName}". Please check the name and try again.`, 
+          text: response.json.message || "Failed to close position. Please try again.", 
           sender: "bot" 
         }]);
         return;
       }
       
-      if (matchingBets.length > 1) {
-        // Multiple matches found, ask user to be more specific
-        let responseMessage = "I found multiple positions matching that name. Please be more specific:\n\n";
-        matchingBets.forEach((bet, index) => {
-          responseMessage += `${index + 1}. ${bet.matchName} - ${bet.market} (${bet.betType.toUpperCase()} @ ${bet.betPrice})\n`;
-        });
-        
-        setMessages(prev => [...prev, { text: responseMessage, sender: "bot" }]);
-        return;
-      }
-      
-      // Get the current market price - in a real app this would come from an API
-      // For now we'll simulate it with a slight deviation from the original price
-      const bet = matchingBets[0];
-      const deviation = (Math.random() * 0.2) - 0.1; // Random deviation between -10% and +10%
-      const currentPrice = bet.betPrice * (1 + deviation);
-      const formattedCurrentPrice = parseFloat(currentPrice.toFixed(2));
-      
-      // Get user account to determine currency type
+      // Build success message
+      const data = response.json;
       const userAccount = getUserAccount(USER_WALLET_ADDRESS);
       const currencySymbol = userAccount.accountType === 'free' ? 'GC' : 'USDC';
       
-      // Ask for confirmation
-      const direction = percentage === 100 ? "fully close" : `close ${percentage}% of`;
-      const confirmMessage = `Are you sure you want to ${direction} your ${bet.betType.toUpperCase()} position on ${bet.matchName} (${bet.market}) at ${bet.betPrice} for ${bet.stakePerPoint}${currencySymbol}/pt?\n\nCurrent market price: ${formattedCurrentPrice}\n\nReply 'confirm' to proceed.`;
+      let resultMessage = `✅ Position ${percentage === 1 ? 'fully' : `${Math.round(percentage * 100)}%`} closed at ${data.currentPrice.toFixed(2)}.\n`;
       
-      // Store the closure details in a data attribute for later
-      setMessages(prev => [...prev, { 
-        text: confirmMessage, 
-        sender: "bot",
-        confirmationData: {
-          action: "closePosition",
-          betId: bet.id,
-          percentage,
-          currentPrice: formattedCurrentPrice
-        }
-      }]);
+      // Add P/L information
+      const profitLoss = data.profitLoss || 0;
+      if (profitLoss > 0) {
+        resultMessage += `You made a profit of ${profitLoss.toFixed(2)}${currencySymbol}. 🎉\n`;
+      } else if (profitLoss < 0) {
+        resultMessage += `You had a loss of ${Math.abs(profitLoss).toFixed(2)}${currencySymbol}. 📉\n`;
+      } else {
+        resultMessage += `You broke even on this trade. 🤝\n`;
+      }
+      
+      // Add collateral information
+      resultMessage += `\nCollateral released: ${data.collateralReleased?.toFixed(2) || 0}${currencySymbol}\n`;
+      
+      if (data.newStatus === "partially_closed") {
+        resultMessage += `Position is now partially closed. You can close the rest later.\n`;
+      } else {
+        resultMessage += `Position is now fully closed.\n`;
+      }
+      
+      resultMessage += `\nYour new balance: ${data.newBalance.toFixed(2)}${currencySymbol}`;
+      
+      setMessages(prev => [...prev, { text: resultMessage, sender: "bot" }]);
+      
+      // Check if profit is high enough to trigger upgrade prompt
+      if (userAccount.accountType === 'free' && profitLoss > 100) {
+        setTimeout(() => {
+          setMessages(prev => [...prev, { 
+            text: "You've earned a nice profit! Upgrade to a cash account to withdraw real winnings. Want to learn more?",
+            sender: "bot",
+            confirmationData: { action: "upgradePrompt" }
+          }]);
+        }, 2000);
+      }
     } catch (error) {
       console.error("❌ Error processing position closure:", error);
       setMessages(prev => [...prev, { 
         text: "There was an error processing your position closure. Please try again.", 
+        sender: "bot" 
+      }]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handlePlaceTrade = async (action: 'buy' | 'sell', matchName: string, stake: number) => {
+    try {
+      setIsLoading(true);
+      
+      // Get the match information from context or create new if missing
+      const match = tradeContext && tradeContext.matchName.toLowerCase().includes(matchName.toLowerCase())
+        ? tradeContext
+        : {
+            matchName: matchName,
+            matchId: Math.floor(Math.random() * 10000).toString(),
+            buyPrice: action === 'buy' ? 3.2 : 3.0,
+            sellPrice: action === 'buy' ? 3.0 : 2.8
+          };
+      
+      // Get user account to determine currency type
+      const userAccount = getUserAccount(USER_WALLET_ADDRESS);
+      const multiplier = 20; // Default collateral multiplier
+      
+      // Prepare the API request
+      const request = {
+        body: {
+          userId: USER_WALLET_ADDRESS,
+          matchId: match.matchId,
+          matchName: match.matchName,
+          action: action,
+          stake: stake,
+          multiplier: multiplier,
+          accountType: userAccount.accountType
+        }
+      };
+      
+      // Call the mock API endpoint
+      const response = await mockPlaceTradeEndpoint(request);
+      
+      if (response.status !== 200 || !response.json.success) {
+        setMessages(prev => [...prev, { 
+          text: response.json.message || "Failed to place trade. Please try again.", 
+          sender: "bot" 
+        }]);
+        return;
+      }
+      
+      // Build success message
+      const data = response.json;
+      const currencySymbol = userAccount.accountType === 'free' ? 'GC' : 'USDC';
+      const collateralHeld = stake * multiplier;
+      
+      const resultMessage = `✅ Trade confirmed: ${action.toUpperCase()} ${match.matchName} at ${data.entryPrice.toFixed(2)} for ${stake}${currencySymbol}/pt.\n\n` +
+                           `Collateral held: ${collateralHeld}${currencySymbol} (${multiplier}x multiplier)\n` +
+                           `Your new balance: ${data.newBalance.toFixed(2)}${currencySymbol}\n\n` +
+                           `To close this position later, say "Close my ${match.matchName} bet" or "Close 50% of my ${match.matchName} bet"`;
+      
+      setMessages(prev => [...prev, { text: resultMessage, sender: "bot" }]);
+      
+      // Clear trade context
+      setTradeContext(null);
+      
+      // Show toast notification
+      toast({
+        title: "Position Opened",
+        description: `${action.toUpperCase()} position on ${match.matchName} for ${stake}${currencySymbol}/pt`,
+      });
+    } catch (error) {
+      console.error("❌ Error placing trade:", error);
+      setMessages(prev => [...prev, { 
+        text: "There was an error placing your trade. Please try again.", 
         sender: "bot" 
       }]);
     } finally {
@@ -230,78 +407,7 @@ const LiveBettingChat = () => {
     
     const { action } = lastBotMessage.confirmationData;
     
-    if (action === "closePosition") {
-      const { betId, percentage, currentPrice } = lastBotMessage.confirmationData;
-      try {
-        setIsLoading(true);
-        
-        // Execute the position closure
-        if (percentage === 100) {
-          fullyCloseBet(betId, currentPrice);
-        } else {
-          partiallyCloseBet(betId, percentage, currentPrice);
-        }
-        
-        // Calculate P/L
-        const bets = getUserBets();
-        const updatedBet = bets.find(bet => bet.id === betId);
-        
-        if (!updatedBet) throw new Error("Bet not found after update");
-        
-        // Get user account to determine currency type
-        const userAccount = getUserAccount(USER_WALLET_ADDRESS);
-        const currencySymbol = userAccount.accountType === 'free' ? 'GC' : 'USDC';
-        
-        let resultMessage = "";
-        if (percentage === 100) {
-          resultMessage = `✅ Position fully closed at ${currentPrice}.\n`;
-        } else {
-          resultMessage = `✅ ${percentage}% of position closed at ${currentPrice}.\n`;
-        }
-        
-        // Add P/L information
-        const profitLoss = updatedBet.profitLoss || 0;
-        if (profitLoss > 0) {
-          resultMessage += `You made a profit of ${profitLoss.toFixed(2)}${currencySymbol}. 🎉\n`;
-        } else if (profitLoss < 0) {
-          resultMessage += `You had a loss of ${Math.abs(profitLoss).toFixed(2)}${currencySymbol}. 📉\n`;
-        } else {
-          resultMessage += `You broke even on this trade. 🤝\n`;
-        }
-        
-        // Add collateral information
-        if (updatedBet.status === "partially_closed") {
-          resultMessage += `\nRemaining position: ${updatedBet.stakeOpen}/pt\n`;
-          resultMessage += `Collateral still held: ${updatedBet.collateralHeld?.toFixed(2) || 0}${currencySymbol}`;
-        } else {
-          resultMessage += `\nAll collateral has been released.`;
-        }
-        
-        setMessages(prev => [...prev, { text: resultMessage, sender: "bot" }]);
-        
-        // Check if profit is high enough to trigger upgrade prompt
-        if (userAccount.accountType === 'free' && profitLoss > 100) {
-          setTimeout(() => {
-            setMessages(prev => [...prev, { 
-              text: "You've earned a nice profit! Upgrade to a cash account to withdraw real winnings. Want to learn more?",
-              sender: "bot",
-              confirmationData: { action: "upgradePrompt" }
-            }]);
-          }, 2000);
-        }
-        
-        return true;
-      } catch (error) {
-        console.error("❌ Error executing position closure:", error);
-        setMessages(prev => [...prev, { 
-          text: "Error executing the position closure. Please try again.", 
-          sender: "bot" 
-        }]);
-        return true;
-      } finally {
-        setIsLoading(false);
-      }
-    } else if (action === "upgradePrompt") {
+    if (action === "upgradePrompt") {
       // This handles user saying "yes" to upgrade prompt
       setMessages(prev => [...prev, { 
         text: "Great choice! To upgrade to a cash account, you'll need to connect your wallet. Would you like me to guide you through the process?",
@@ -319,59 +425,6 @@ const LiveBettingChat = () => {
     }
     
     return false;
-  };
-
-  const handlePlaceBet = (market: string, action: 'buy' | 'sell', amount: number) => {
-    try {
-      // Get user account to determine currency type
-      const userAccount = getUserAccount(USER_WALLET_ADDRESS);
-      const currencyType = userAccount.accountType === 'free' ? 'Gold Coins' : 'USDC';
-      
-      // Create the bet object
-      const bet = {
-        matchId: Math.floor(Math.random() * 1000),
-        matchName: market,
-        market: `${market} Points`,
-        betType: action,
-        betPrice: action === 'buy' ? 3.2 : 2.8,
-        stakePerPoint: amount,
-        makeupLimit: 30,
-        collateralHeld: amount * 30, // Collateral = stake * makeupLimit
-        userId: USER_WALLET_ADDRESS
-      };
-      
-      // Place the bet using the utility function
-      const newBet = placeBet(bet, USER_WALLET_ADDRESS);
-      
-      // Send confirmation message
-      setTimeout(() => {
-        setMessages(prev => [...prev, { 
-          text: `✅ You ${action === 'buy' ? 'bought' : 'sold'} ${market} at ${newBet.betPrice} for ${amount}${userAccount.accountType === 'free' ? 'GC' : 'USDC'}/pt.\nCollateral held: ${newBet.collateralHeld}${userAccount.accountType === 'free' ? 'GC' : 'USDC'} (${newBet.makeupLimit}x)`,
-          sender: "bot" 
-        }]);
-      }, 500);
-      
-      toast({
-        title: "Position Opened",
-        description: `${action.toUpperCase()} position on ${market} for ${amount} per point`,
-      });
-      
-      // If it's a free account and they've placed enough bets, prompt to upgrade
-      if (userAccount.accountType === 'free' && userAccount.betsPlaced >= 3 && !userAccount.lastPromptDate) {
-        setTimeout(() => {
-          setShowUpgradePrompt(true);
-        }, 2000);
-      }
-      
-      return true;
-    } catch (error) {
-      console.error("❌ Error placing bet:", error);
-      setMessages(prev => [...prev, { 
-        text: "There was an error placing your bet. Please try again.", 
-        sender: "bot" 
-      }]);
-      return false;
-    }
   };
 
   const handleSendMessage = async () => {
@@ -416,6 +469,38 @@ const LiveBettingChat = () => {
     try {
       setIsLoading(true);
       
+      // Check for "bet live on X" pattern
+      const betLiveMatch = userMessage.match(/bet\s+live\s+(?:on\s+)?(.*)/i);
+      if (betLiveMatch) {
+        const matchName = betLiveMatch[1].trim();
+        await handleFetchLivePrice(matchName);
+        return;
+      }
+      
+      // Check for "live price for X" pattern
+      const livePriceMatch = userMessage.match(/live\s+price\s+(?:for\s+)?(.*)/i);
+      if (livePriceMatch) {
+        const matchName = livePriceMatch[1].trim();
+        await handleFetchLivePrice(matchName);
+        return;
+      }
+      
+      // Check for "place trade" pattern (if we have trade context)
+      if (userMessage.toLowerCase().includes('place trade') && tradeContext) {
+        const userAccount = getUserAccount(USER_WALLET_ADDRESS);
+        
+        // Ask for buy/sell direction and stake
+        setMessages(prev => [...prev, { 
+          text: `For ${tradeContext.matchName}:\n\n` +
+                `Buy price: ${tradeContext.buyPrice.toFixed(2)}\n` +
+                `Sell price: ${tradeContext.sellPrice.toFixed(2)}\n\n` +
+                `Would you like to Buy or Sell? And how much per point?\n\n` +
+                `Example: "Buy for 10/pt" or "Sell for 5/pt"`,
+          sender: "bot"
+        }]);
+        return;
+      }
+      
       // Check for bet placement commands
       const buyRegex = /(?:buy|long)\s+(.*?)(?:\s+at\s+(\d+(?:\.\d+)?))?\s+(?:for\s+)?\$?(\d+)(?:\/pt)?/i;
       const sellRegex = /(?:sell|short)\s+(.*?)(?:\s+at\s+(\d+(?:\.\d+)?))?\s+(?:for\s+)?\$?(\d+)(?:\/pt)?/i;
@@ -428,16 +513,36 @@ const LiveBettingChat = () => {
         const amount = parseInt(buyMatch[3]);
         
         if (market && !isNaN(amount) && amount > 0) {
-          const success = handlePlaceBet(market, 'buy', amount);
-          if (success) return;
+          await handlePlaceTrade('buy', market, amount);
+          return;
         }
       } else if (sellMatch) {
         const market = sellMatch[1].trim();
         const amount = parseInt(sellMatch[3]);
         
         if (market && !isNaN(amount) && amount > 0) {
-          const success = handlePlaceBet(market, 'sell', amount);
-          if (success) return;
+          await handlePlaceTrade('sell', market, amount);
+          return;
+        }
+      }
+      
+      // Simpler buy/sell commands (when we have trade context)
+      if (tradeContext) {
+        const simpleBuyMatch = userMessage.match(/buy\s+(?:for\s+)?\$?(\d+)(?:\/pt)?/i);
+        const simpleSellMatch = userMessage.match(/sell\s+(?:for\s+)?\$?(\d+)(?:\/pt)?/i);
+        
+        if (simpleBuyMatch) {
+          const amount = parseInt(simpleBuyMatch[1]);
+          if (!isNaN(amount) && amount > 0) {
+            await handlePlaceTrade('buy', tradeContext.matchName, amount);
+            return;
+          }
+        } else if (simpleSellMatch) {
+          const amount = parseInt(simpleSellMatch[1]);
+          if (!isNaN(amount) && amount > 0) {
+            await handlePlaceTrade('sell', tradeContext.matchName, amount);
+            return;
+          }
         }
       }
       
@@ -462,7 +567,7 @@ const LiveBettingChat = () => {
             return;
           }
           
-          handlePlaceBet(market, action, amount);
+          await handlePlaceTrade(action, market, amount);
         } else if (userMessage.toLowerCase() === '/help') {
           // Get account type to determine currency in help message
           const userAccount = getUserAccount(USER_WALLET_ADDRESS);
@@ -470,15 +575,16 @@ const LiveBettingChat = () => {
           
           setMessages(prev => [...prev, { 
             text: `Available commands:\n\n` +
-                  `- /buy [market] [amount]: Buy a market with ${currencyType}\n` +
-                  `- /sell [market] [amount]: Sell a market with ${currencyType}\n` +
-                  `- 'Show [sport] spreads': View current markets\n` +
+                  `- 'Bet live on [market]': Get current prices\n` +
+                  `- 'Buy [market] for [amount]/pt': Open buy position\n` +
+                  `- 'Sell [market] for [amount]/pt': Open sell position\n` +
                   `- 'Close [market] bet': Fully close a position\n` +
                   `- 'Close [percentage]% of [market] bet': Partially close a position\n` +
-                  `- /help: Show this help message\n\n` +
+                  `- '/help': Show this help message\n\n` +
                   (userAccount.accountType === 'free' ? 
                     `You're in Free Play mode using Gold Coins. Upgrade to Cash mode to bet with real USDC.` : 
-                    `You're in Cash mode betting with real USDC.`), 
+                    `You're in Cash mode betting with real USDC.`) + 
+                    `\n\nNo purchase necessary. Free points available daily. Terms apply.`, 
             sender: "bot" 
           }]);
         } else if (userMessage.toLowerCase() === '/account') {
@@ -488,8 +594,8 @@ const LiveBettingChat = () => {
           setMessages(prev => [...prev, { 
             text: `Your Account:\n\n` +
                   `- Type: ${userAccount.accountType === 'free' ? 'Free Play' : 'Cash'}\n` +
-                  `- Gold Coins: ${userAccount.virtualBalance}\n` +
-                  `- USDC Balance: ${userAccount.walletBalance}\n` +
+                  `- Gold Coins: ${userAccount.virtualBalance.toFixed(2)}\n` +
+                  `- USDC Balance: ${userAccount.walletBalance.toFixed(2)}\n` +
                   `- Bets Placed: ${userAccount.betsPlaced}\n` +
                   (userAccount.accountType === 'free' ? 
                     `\nUpgrade to Cash mode to withdraw real winnings.` : 
@@ -511,6 +617,12 @@ const LiveBettingChat = () => {
           sender: "bot",
           confirmationData: { action: "walletConnectGuide" }
         }]);
+      } else if (userMessage.toLowerCase().includes('football spreads') || 
+                 userMessage.toLowerCase().includes('football odds')) {
+        await fetchLivePrices('football');
+      } else if (userMessage.toLowerCase().includes('basketball spreads') || 
+                 userMessage.toLowerCase().includes('basketball odds')) {
+        await fetchLivePrices('basketball');
       } else {
         try {
           console.log("🔄 Sending message to chatbot API:", userMessage);
@@ -615,8 +727,8 @@ const LiveBettingChat = () => {
               className="bg-primary/10 hover:bg-primary/20 text-primary px-3 py-1.5 rounded-full text-sm flex-shrink-0"
               onClick={() => setMessages(prev => [...prev, { 
                 text: "Available commands:\n\n" +
-                      "- '/buy [market] [amount]': Buy a market\n" +
-                      "- '/sell [market] [amount]': Sell a market\n" +
+                      "- 'Bet live on [team]': Get current odds\n" +
+                      "- 'Buy [market] for [amount]/pt': Buy position\n" +
                       "- 'Close [market] bet': Fully close a position\n" +
                       "- 'Close 50% of [market] bet': Partially close\n" +
                       "- '/help': Show all commands", 
@@ -711,6 +823,9 @@ const LiveBettingChat = () => {
                 <Send className="h-5 w-5" />
               </button>
             </div>
+            <div className="mt-2 text-xs text-muted-foreground text-center">
+              No purchase necessary. Free points available daily. Terms apply.
+            </div>
           </div>
         </div>
       )}
@@ -719,3 +834,4 @@ const LiveBettingChat = () => {
 };
 
 export default LiveBettingChat;
+
