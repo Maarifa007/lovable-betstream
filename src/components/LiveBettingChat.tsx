@@ -1,19 +1,27 @@
+
 import { useState, useEffect } from "react";
-import { MessageCircle, X, Send } from "lucide-react";
+import { MessageCircle, X, Send, Wallet } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { 
   getUserBets, 
   partiallyCloseBet, 
   fullyCloseBet, 
-  findBetByName 
+  findBetByName,
+  getUserAccount,
+  shouldPromptUpgrade,
+  markUpgradePrompt
 } from "@/utils/betUtils";
+
+// Default user wallet address - in real app this would come from auth
+const USER_WALLET_ADDRESS = "0x1234...5678";
 
 const LiveBettingChat = () => {
   const [isOpen, setIsOpen] = useState(false);
-  const [messages, setMessages] = useState<Array<{text: string, sender: "user" | "bot"}>>([]);
+  const [messages, setMessages] = useState<Array<{text: string, sender: "user" | "bot", confirmationData?: any}>>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<"connecting" | "connected" | "disconnected">("connecting");
+  const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
 
   useEffect(() => {
     // Check if chatbot API is available
@@ -47,7 +55,45 @@ const LiveBettingChat = () => {
       text: "👋 Hi! I'm Mikey, your AI betting assistant. I can help you place bets, check odds, or close positions. Try commands like:\n\n• 'Show NBA spreads'\n• 'Buy Lakers at 5.5 for $10/pt'\n• 'Close my Warriors bet'\n• 'Close 50% of my Lakers bet'\n\nType /help for more commands.",
       sender: "bot"
     }]);
+    
+    // Check if we should prompt user to upgrade
+    const userAccount = getUserAccount(USER_WALLET_ADDRESS);
+    const { should, message } = shouldPromptUpgrade(userAccount);
+    
+    if (should) {
+      setShowUpgradePrompt(true);
+      // Mark as prompted to avoid showing too frequently
+      markUpgradePrompt(userAccount);
+    }
   }, []);
+
+  useEffect(() => {
+    // Show upgrade prompt message if needed
+    if (showUpgradePrompt && isOpen) {
+      const userAccount = getUserAccount(USER_WALLET_ADDRESS);
+      const { message } = shouldPromptUpgrade(userAccount);
+      
+      setTimeout(() => {
+        setMessages(prev => [...prev, { 
+          text: message || "Ready to go pro? Connect a wallet and play for real!",
+          sender: "bot"
+        }]);
+        
+        // Add a special message with a call to action
+        setTimeout(() => {
+          setMessages(prev => [...prev, { 
+            text: "Convert to a real USDC account to withdraw winnings anytime. Would you like to upgrade now?",
+            sender: "bot",
+            confirmationData: {
+              action: "upgradePrompt"
+            }
+          }]);
+        }, 1000);
+      }, 3000);
+      
+      setShowUpgradePrompt(false);
+    }
+  }, [showUpgradePrompt, isOpen]);
 
   const fetchLivePrices = async (sport: string) => {
     try {
@@ -148,15 +194,18 @@ const LiveBettingChat = () => {
       const currentPrice = bet.betPrice * (1 + deviation);
       const formattedCurrentPrice = parseFloat(currentPrice.toFixed(2));
       
+      // Get user account to determine currency type
+      const userAccount = getUserAccount(USER_WALLET_ADDRESS);
+      const currencySymbol = userAccount.accountType === 'free' ? 'GC' : 'USDC';
+      
       // Ask for confirmation
       const direction = percentage === 100 ? "fully close" : `close ${percentage}% of`;
-      const confirmMessage = `Are you sure you want to ${direction} your ${bet.betType.toUpperCase()} position on ${bet.matchName} (${bet.market}) at ${bet.betPrice} for ${bet.stakePerPoint}/pt?\n\nCurrent market price: ${formattedCurrentPrice}\n\nReply 'confirm' to proceed.`;
+      const confirmMessage = `Are you sure you want to ${direction} your ${bet.betType.toUpperCase()} position on ${bet.matchName} (${bet.market}) at ${bet.betPrice} for ${bet.stakePerPoint}${currencySymbol}/pt?\n\nCurrent market price: ${formattedCurrentPrice}\n\nReply 'confirm' to proceed.`;
       
       // Store the closure details in a data attribute for later
       setMessages(prev => [...prev, { 
         text: confirmMessage, 
         sender: "bot",
-        // @ts-ignore - Adding custom property for confirmation
         confirmationData: {
           action: "closePosition",
           betId: bet.id,
@@ -178,9 +227,10 @@ const LiveBettingChat = () => {
   const processConfirmation = async (lastBotMessage: any) => {
     if (!lastBotMessage?.confirmationData) return false;
     
-    const { action, betId, percentage, currentPrice } = lastBotMessage.confirmationData;
+    const { action } = lastBotMessage.confirmationData;
     
     if (action === "closePosition") {
+      const { betId, percentage, currentPrice } = lastBotMessage.confirmationData;
       try {
         setIsLoading(true);
         
@@ -197,6 +247,10 @@ const LiveBettingChat = () => {
         
         if (!updatedBet) throw new Error("Bet not found after update");
         
+        // Get user account to determine currency type
+        const userAccount = getUserAccount(USER_WALLET_ADDRESS);
+        const currencySymbol = userAccount.accountType === 'free' ? 'GC' : 'USDC';
+        
         let resultMessage = "";
         if (percentage === 100) {
           resultMessage = `✅ Position fully closed at ${currentPrice}.\n`;
@@ -207,9 +261,9 @@ const LiveBettingChat = () => {
         // Add P/L information
         const profitLoss = updatedBet.profitLoss || 0;
         if (profitLoss > 0) {
-          resultMessage += `You made a profit of $${profitLoss.toFixed(2)}. 🎉\n`;
+          resultMessage += `You made a profit of ${profitLoss.toFixed(2)}${currencySymbol}. 🎉\n`;
         } else if (profitLoss < 0) {
-          resultMessage += `You had a loss of $${Math.abs(profitLoss).toFixed(2)}. 📉\n`;
+          resultMessage += `You had a loss of ${Math.abs(profitLoss).toFixed(2)}${currencySymbol}. 📉\n`;
         } else {
           resultMessage += `You broke even on this trade. 🤝\n`;
         }
@@ -217,12 +271,23 @@ const LiveBettingChat = () => {
         // Add collateral information
         if (updatedBet.status === "partially_closed") {
           resultMessage += `\nRemaining position: ${updatedBet.stakeOpen}/pt\n`;
-          resultMessage += `Collateral still held: $${updatedBet.collateralHeld?.toFixed(2) || 0}`;
+          resultMessage += `Collateral still held: ${updatedBet.collateralHeld?.toFixed(2) || 0}${currencySymbol}`;
         } else {
           resultMessage += `\nAll collateral has been released.`;
         }
         
         setMessages(prev => [...prev, { text: resultMessage, sender: "bot" }]);
+        
+        // Check if profit is high enough to trigger upgrade prompt
+        if (userAccount.accountType === 'free' && profitLoss > 100) {
+          setTimeout(() => {
+            setMessages(prev => [...prev, { 
+              text: "You've earned a nice profit! Upgrade to a cash account to withdraw real winnings. Want to learn more?",
+              sender: "bot",
+              confirmationData: { action: "upgradePrompt" }
+            }]);
+          }, 2000);
+        }
         
         return true;
       } catch (error) {
@@ -235,6 +300,21 @@ const LiveBettingChat = () => {
       } finally {
         setIsLoading(false);
       }
+    } else if (action === "upgradePrompt") {
+      // This handles user saying "yes" to upgrade prompt
+      setMessages(prev => [...prev, { 
+        text: "Great choice! To upgrade to a cash account, you'll need to connect your wallet. Would you like me to guide you through the process?",
+        sender: "bot",
+        confirmationData: { action: "walletConnectGuide" }
+      }]);
+      return true;
+    } else if (action === "walletConnectGuide") {
+      // Guide user to connect wallet
+      setMessages(prev => [...prev, { 
+        text: "Here's how to connect your wallet:\n\n1. Click on the Wallet icon in the top right corner\n2. Click 'Upgrade to Cash Mode'\n3. Follow the prompts to connect your existing wallet or create a new one\n\nOnce connected, you'll be able to deposit USDC and place real money bets.",
+        sender: "bot"
+      }]);
+      return true;
     }
     
     return false;
@@ -247,12 +327,34 @@ const LiveBettingChat = () => {
     setMessages(prev => [...prev, { text: userMessage, sender: "user" }]);
     setInput("");
     
-    // Check if this is a confirmation response
+    // Handle confirmations first (like "confirm", "yes", etc.)
     if (userMessage.toLowerCase() === 'confirm') {
       // Get the last bot message
       const lastBotMessage = [...messages].reverse().find(msg => msg.sender === "bot");
       if (lastBotMessage) {
         const handled = await processConfirmation(lastBotMessage);
+        if (handled) return;
+      }
+    } else if (['yes', 'sure', 'okay', 'ok'].includes(userMessage.toLowerCase())) {
+      // Look for upgrade prompts
+      const lastBotMessage = [...messages].reverse().find(
+        msg => msg.sender === "bot" && 
+        msg.confirmationData?.action === "upgradePrompt"
+      );
+      
+      if (lastBotMessage) {
+        const handled = await processConfirmation(lastBotMessage);
+        if (handled) return;
+      }
+      
+      // Look for wallet connect guide prompts
+      const walletGuideMessage = [...messages].reverse().find(
+        msg => msg.sender === "bot" && 
+        msg.confirmationData?.action === "walletConnectGuide"
+      );
+      
+      if (walletGuideMessage) {
+        const handled = await processConfirmation(walletGuideMessage);
         if (handled) return;
       }
     }
@@ -283,6 +385,10 @@ const LiveBettingChat = () => {
           
           await new Promise(resolve => setTimeout(resolve, 1000));
           
+          // Get account type to determine currency
+          const userAccount = getUserAccount(USER_WALLET_ADDRESS);
+          const currencyType = userAccount.accountType === 'free' ? 'Gold Coins' : 'USDC';
+          
           const betId = `bet-${Date.now()}`;
           const bet = {
             id: betId,
@@ -293,16 +399,27 @@ const LiveBettingChat = () => {
             betPrice: action === 'buy' ? 3.2 : 2.8,
             stakePerPoint: amount,
             makeupLimit: 30,
-            status: 'open',
-            timestamp: Date.now()
+            status: 'open' as const,
+            timestamp: Date.now(),
+            accountType: userAccount.accountType
           };
           
           const storedBets = localStorage.getItem('userBets');
           const bets = storedBets ? JSON.parse(storedBets) : [];
           localStorage.setItem('userBets', JSON.stringify([...bets, bet]));
           
+          // Update user account - track bets placed
+          userAccount.betsPlaced += 1;
+          
+          // If it's a free account and they've placed enough bets, prompt to upgrade
+          if (userAccount.accountType === 'free' && userAccount.betsPlaced >= 3 && !userAccount.lastPromptDate) {
+            setTimeout(() => {
+              setShowUpgradePrompt(true);
+            }, 2000);
+          }
+          
           setMessages(prev => [...prev, { 
-            text: `✅ ${action.toUpperCase()} position opened on ${market} for ${amount} per point`, 
+            text: `✅ ${action.toUpperCase()} position opened on ${market} for ${amount} ${currencyType} per point`, 
             sender: "bot" 
           }]);
           
@@ -311,14 +428,36 @@ const LiveBettingChat = () => {
             description: `${action.toUpperCase()} position on ${market} for ${amount} per point`,
           });
         } else if (userMessage.toLowerCase() === '/help') {
+          // Get account type to determine currency in help message
+          const userAccount = getUserAccount(USER_WALLET_ADDRESS);
+          const currencyType = userAccount.accountType === 'free' ? 'Gold Coins' : 'USDC';
+          
           setMessages(prev => [...prev, { 
-            text: "Available commands:\n\n" +
-                  "- /buy [market] [amount]: Buy a market\n" +
-                  "- /sell [market] [amount]: Sell a market\n" +
-                  "- 'Show [sport] spreads': View current markets\n" +
-                  "- 'Close [market] bet': Fully close a position\n" +
-                  "- 'Close [percentage]% of [market] bet': Partially close a position\n" +
-                  "- /help: Show this help message", 
+            text: `Available commands:\n\n` +
+                  `- /buy [market] [amount]: Buy a market with ${currencyType}\n` +
+                  `- /sell [market] [amount]: Sell a market with ${currencyType}\n` +
+                  `- 'Show [sport] spreads': View current markets\n` +
+                  `- 'Close [market] bet': Fully close a position\n` +
+                  `- 'Close [percentage]% of [market] bet': Partially close a position\n` +
+                  `- /help: Show this help message\n\n` +
+                  (userAccount.accountType === 'free' ? 
+                    `You're in Free Play mode using Gold Coins. Upgrade to Cash mode to bet with real USDC.` : 
+                    `You're in Cash mode betting with real USDC.`), 
+            sender: "bot" 
+          }]);
+        } else if (userMessage.toLowerCase() === '/account') {
+          // Show account status
+          const userAccount = getUserAccount(USER_WALLET_ADDRESS);
+          
+          setMessages(prev => [...prev, { 
+            text: `Your Account:\n\n` +
+                  `- Type: ${userAccount.accountType === 'free' ? 'Free Play' : 'Cash'}\n` +
+                  `- Gold Coins: ${userAccount.virtualBalance}\n` +
+                  `- USDC Balance: ${userAccount.walletBalance}\n` +
+                  `- Bets Placed: ${userAccount.betsPlaced}\n` +
+                  (userAccount.accountType === 'free' ? 
+                    `\nUpgrade to Cash mode to withdraw real winnings.` : 
+                    `\nYour wallet is connected and ready for cash betting.`), 
             sender: "bot" 
           }]);
         } else {
@@ -327,6 +466,15 @@ const LiveBettingChat = () => {
             sender: "bot" 
           }]);
         }
+      } else if (userMessage.toLowerCase().startsWith('upgrade') || 
+                 userMessage.toLowerCase().includes('cash mode') ||
+                 userMessage.toLowerCase().includes('wallet')) {
+        // Handle upgrade request
+        setMessages(prev => [...prev, { 
+          text: "Ready to upgrade to Cash mode and bet with real USDC? I'll guide you through connecting your wallet.",
+          sender: "bot",
+          confirmationData: { action: "walletConnectGuide" }
+        }]);
       } else {
         try {
           console.log("🔄 Sending message to chatbot API:", userMessage);
@@ -337,7 +485,8 @@ const LiveBettingChat = () => {
               message: userMessage,
               context: {
                 recentMessages: messages.slice(-5),
-                timestamp: new Date().toISOString()
+                timestamp: new Date().toISOString(),
+                accountType: getUserAccount(USER_WALLET_ADDRESS).accountType
               }
             })
           });
@@ -465,6 +614,38 @@ const LiveBettingChat = () => {
                       {j < msg.text.split('\n').length - 1 && <br />}
                     </span>
                   ))}
+                  
+                  {/* Special action buttons for certain message types */}
+                  {msg.sender === "bot" && msg.confirmationData?.action === "upgradePrompt" && (
+                    <div className="mt-2 flex justify-end gap-2">
+                      <button 
+                        onClick={() => processConfirmation(msg)}
+                        className="px-3 py-1 bg-green-500 text-white rounded-md text-sm hover:bg-green-600 transition-colors"
+                      >
+                        Upgrade Now
+                      </button>
+                    </div>
+                  )}
+                  
+                  {/* Wallet connect guide button */}
+                  {msg.sender === "bot" && msg.confirmationData?.action === "walletConnectGuide" && (
+                    <div className="mt-2 flex justify-end gap-2">
+                      <button 
+                        onClick={() => {
+                          // Open wallet modal (in a real app, trigger the wallet modal)
+                          window.dispatchEvent(new CustomEvent('openWalletModal'));
+                          setMessages(prev => [...prev, { 
+                            text: "I've opened the wallet panel for you. Select 'Upgrade to Cash Mode' to continue.",
+                            sender: "bot" 
+                          }]);
+                        }}
+                        className="px-3 py-1 bg-primary text-white rounded-md text-sm hover:bg-primary/90 transition-colors flex items-center gap-1"
+                      >
+                        <Wallet className="h-3 w-3" />
+                        Connect Wallet
+                      </button>
+                    </div>
+                  )}
                 </div>
               ))
             )}

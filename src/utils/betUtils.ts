@@ -1,5 +1,3 @@
-
-
 interface Bet {
   id: string;
   matchId: number | string;
@@ -18,7 +16,181 @@ interface Bet {
   stakeOpen?: number;  // Amount still live
   stakeClosed?: number; // Amount already settled
   currentPrice?: number; // Last known price for the market
+  accountType?: 'free' | 'cash'; // Track bet account type
 }
+
+// User account type
+export type AccountType = 'free' | 'cash';
+
+// User account interface to store account information
+export interface UserAccount {
+  userId: string;
+  accountType: AccountType;
+  virtualBalance: number;  // For Free accounts
+  walletBalance: number;   // For Cash accounts (USDC)
+  walletAddress?: string;  // Only for Cash accounts
+  betsPlaced: number;
+  walletConnectedAt?: number;
+  conversionDate?: number;
+  isSweepstakesEligible: boolean;
+  lastPromptDate?: number; // To track when we last prompted for conversion
+}
+
+// Get user account from localStorage or create a new one with default values
+export const getUserAccount = (userId: string): UserAccount => {
+  const account = localStorage.getItem(`userAccount_${userId}`);
+  if (account) {
+    return JSON.parse(account);
+  }
+  
+  // Default to free account with 1000 virtual points
+  return {
+    userId,
+    accountType: 'free',
+    virtualBalance: 1000,
+    walletBalance: 0,
+    betsPlaced: 0,
+    isSweepstakesEligible: true
+  };
+};
+
+// Save user account to localStorage
+export const saveUserAccount = (account: UserAccount): void => {
+  localStorage.setItem(`userAccount_${account.userId}`, JSON.stringify(account));
+};
+
+// Check if user should be prompted to upgrade to cash account
+export const shouldPromptUpgrade = (account: UserAccount): { should: boolean, message?: string } => {
+  if (account.accountType === 'cash') {
+    return { should: false };
+  }
+  
+  // Don't prompt too frequently (once per 24 hours)
+  const lastPrompt = account.lastPromptDate || 0;
+  const hoursSinceLastPrompt = (Date.now() - lastPrompt) / (1000 * 60 * 60);
+  if (hoursSinceLastPrompt < 24) {
+    return { should: false };
+  }
+  
+  // Trigger: 3+ bets placed
+  if (account.betsPlaced >= 3) {
+    return { 
+      should: true,
+      message: "Ready to go pro? Connect a wallet and play for real!"
+    };
+  }
+  
+  // Trigger: Win 100+ virtual points (check if virtual balance > initial 1000)
+  if (account.virtualBalance > 1100) {
+    return { 
+      should: true,
+      message: "You've earned a bonus! Unlock real cash play by upgrading."
+    };
+  }
+  
+  // Trigger: Time-based - if account exists for over 2 days
+  const accountCreatedTime = account.conversionDate || 0;
+  const daysSinceCreation = (Date.now() - accountCreatedTime) / (1000 * 60 * 60 * 24);
+  if (daysSinceCreation > 2) {
+    return { 
+      should: true,
+      message: "Free mode is fun, but real payouts await in cash mode. Switch now!"
+    };
+  }
+  
+  return { should: false };
+};
+
+// Update user account when prompted about upgrade (to avoid prompting too often)
+export const markUpgradePrompt = (account: UserAccount): UserAccount => {
+  const updatedAccount = { 
+    ...account,
+    lastPromptDate: Date.now()
+  };
+  saveUserAccount(updatedAccount);
+  return updatedAccount;
+};
+
+// Convert free account to cash account
+export const convertToCashAccount = (account: UserAccount, walletAddress: string): UserAccount => {
+  if (account.accountType === 'cash') {
+    return account;
+  }
+  
+  const updatedAccount = {
+    ...account,
+    accountType: 'cash' as AccountType,
+    walletAddress,
+    walletConnectedAt: Date.now(),
+    conversionDate: Date.now()
+  };
+  
+  saveUserAccount(updatedAccount);
+  return updatedAccount;
+};
+
+// Update the bet placing logic to increment bets placed
+export const placeBet = (bet: Omit<Bet, 'id' | 'status' | 'timestamp'>, userId: string): Bet => {
+  const newBet: Bet = {
+    ...bet,
+    id: `bet-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+    status: 'open',
+    timestamp: Date.now(),
+    userId
+  };
+  
+  // Get user account
+  const account = getUserAccount(userId);
+  
+  // Set the account type on the bet
+  newBet.accountType = account.accountType;
+  
+  // Increment bets placed
+  account.betsPlaced += 1;
+  
+  // Update user balance based on account type
+  if (account.accountType === 'free') {
+    account.virtualBalance -= (newBet.collateralHeld || 0);
+  } else {
+    account.walletBalance -= (newBet.collateralHeld || 0);
+  }
+  
+  saveUserAccount(account);
+  
+  // Save the bet
+  const bets = getUserBets();
+  const updatedBets = [...bets, newBet];
+  saveBets(updatedBets);
+  
+  return newBet;
+};
+
+// Modify settlement logic to handle both account types
+export const settleAccountBet = (bet: Bet, finalResult: number, userId: string): { bet: Bet, account: UserAccount } => {
+  const updatedBet = settleBet(bet, finalResult);
+  const account = getUserAccount(userId);
+  
+  // Update user balance based on account type and bet result
+  if (updatedBet.profitLoss) {
+    if (account.accountType === 'free') {
+      account.virtualBalance += updatedBet.profitLoss;
+      // Also return collateral
+      if (updatedBet.collateralHeld) {
+        account.virtualBalance += updatedBet.collateralHeld;
+      }
+    } else {
+      account.walletBalance += updatedBet.profitLoss;
+      // Also return collateral
+      if (updatedBet.collateralHeld) {
+        account.walletBalance += updatedBet.collateralHeld;
+      }
+    }
+    
+    saveUserAccount(account);
+  }
+  
+  return { bet: updatedBet, account };
+};
 
 /**
  * Calculate profit/loss based on bet type and final result
@@ -262,3 +434,20 @@ export const findBetByName = (searchTerm: string): Bet[] => {
   });
 };
 
+// Get user bets filtered by account type
+export const getUserBetsByAccountType = (userId: string, accountType: AccountType): Bet[] => {
+  const bets = getUserBets();
+  return bets.filter(bet => 
+    bet.userId === userId && 
+    (bet.accountType === accountType || !bet.accountType) // Handle legacy bets with no accountType
+  );
+};
+
+// Get account balance based on account type
+export const getAccountBalance = (userId: string): { virtualBalance: number, walletBalance: number } => {
+  const account = getUserAccount(userId);
+  return {
+    virtualBalance: account.virtualBalance,
+    walletBalance: account.walletBalance
+  };
+};

@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import WebSocketService from "@/services/webSocketService";
@@ -13,6 +14,7 @@ import BetSlip from "@/components/BetSlip";
 import LiveBettingChat from "@/components/LiveBettingChat";
 import { fetchMarketData } from "@/utils/apiUtils";
 import { debounce } from "lodash";
+import { getUserAccount, AccountType } from "@/utils/betUtils";
 
 // Type definitions
 interface Market {
@@ -33,15 +35,47 @@ const USER_WALLET_ADDRESS = "0x1234...5678"; // This would be from authenticatio
 const Index = () => {
   const [selectedSport, setSelectedSport] = useState("football");
   const [liveMatches, setLiveMatches] = useState<Market[]>([]);
-  const [walletBalance, setWalletBalance] = useState<number>(10000);
+  const [walletBalance, setWalletBalance] = useState<number>(0);
+  const [virtualBalance, setVirtualBalance] = useState<number>(0);
+  const [accountType, setAccountType] = useState<AccountType>('free');
   const [isWalletModalOpen, setIsWalletModalOpen] = useState(false);
   const [isNewPositionModalOpen, setIsNewPositionModalOpen] = useState(false);
   const [selectedMatch, setSelectedMatch] = useState<Market | null>(null);
   const [betAction, setBetAction] = useState<'buy' | 'sell' | null>(null);
+  const [showAccountSelection, setShowAccountSelection] = useState(false);
   
   const wsRef = useRef<WebSocketService | null>(null);
   const priceRefs = useRef<Record<string, HTMLDivElement>>({});
   const queryClient = useQueryClient();
+
+  // Check if user has selected account type yet
+  useEffect(() => {
+    // Get user account
+    const account = getUserAccount(USER_WALLET_ADDRESS);
+    setAccountType(account.accountType);
+    setVirtualBalance(account.virtualBalance);
+    setWalletBalance(account.walletBalance);
+    
+    // Check if account has been chosen
+    const hasChosenAccount = localStorage.getItem(`account_chosen_${USER_WALLET_ADDRESS}`);
+    
+    // If they haven't chosen an account type and just opened the app, show wallet modal with account selection
+    if (!hasChosenAccount) {
+      setShowAccountSelection(true);
+      setIsWalletModalOpen(true);
+    }
+    
+    // Listen for wallet modal open requests from LiveBettingChat
+    const handleOpenWalletModal = () => {
+      setIsWalletModalOpen(true);
+    };
+    
+    window.addEventListener('openWalletModal', handleOpenWalletModal);
+    
+    return () => {
+      window.removeEventListener('openWalletModal', handleOpenWalletModal);
+    };
+  }, []);
 
   // Create a debounced market update function to reduce unnecessary re-renders
   const debouncedUpdateMarkets = useRef(
@@ -85,13 +119,27 @@ const Index = () => {
   // Handler for balance updates with API call
   const handleBalanceUpdate = async (newBalance: number) => {
     try {
-      // In a real implementation, you'd fetch the balance from the backend
-      // For now, we'll use the incoming newBalance parameter and simulate an API response
-      setWalletBalance(newBalance);
+      // Update user account
+      const account = getUserAccount(USER_WALLET_ADDRESS);
+      
+      // Update appropriate balance based on account type
+      if (account.accountType === 'free') {
+        account.virtualBalance = newBalance;
+        setVirtualBalance(newBalance);
+      } else {
+        account.walletBalance = newBalance;
+        setWalletBalance(newBalance);
+      }
+      
+      // Save updated account
+      localStorage.setItem(`userAccount_${USER_WALLET_ADDRESS}`, JSON.stringify(account));
+      
+      // Update UI state for the active balance display
+      const displayBalance = account.accountType === 'free' ? account.virtualBalance : account.walletBalance;
       
       toast({
         title: "Balance Updated",
-        description: `Your balance is now $${newBalance.toLocaleString()}`
+        description: `Your ${account.accountType === 'free' ? 'Gold Coins' : 'USDC'} balance is now ${displayBalance.toLocaleString()}`
       });
     } catch (error) {
       console.error("Error updating balance:", error);
@@ -164,6 +212,23 @@ const Index = () => {
             console.log(`📊 Batch update received for ${data.updates.length} markets.`);
             debouncedUpdateMarkets(data.updates);
           }
+          
+          // Handle account balance updates
+          if (data.type === 'balance_update' && data.userId === USER_WALLET_ADDRESS) {
+            console.log(`💰 Received balance update:`, data);
+            
+            // Update the appropriate balance based on account type
+            const account = getUserAccount(USER_WALLET_ADDRESS);
+            if (data.accountType === 'free') {
+              setVirtualBalance(data.balance);
+              account.virtualBalance = data.balance;
+            } else {
+              setWalletBalance(data.balance);
+              account.walletBalance = data.balance;
+            }
+            
+            localStorage.setItem(`userAccount_${USER_WALLET_ADDRESS}`, JSON.stringify(account));
+          }
         } catch (error) {
           console.error("❌ WebSocket message error:", error);
         }
@@ -183,23 +248,49 @@ const Index = () => {
     };
   }, [initialMarkets, queryClient, selectedSport, debouncedUpdateMarkets]);
 
+  // Check for account updates
+  useEffect(() => {
+    // Set up interval to check for account updates
+    const intervalId = setInterval(() => {
+      const account = getUserAccount(USER_WALLET_ADDRESS);
+      
+      if (account.accountType !== accountType) {
+        setAccountType(account.accountType);
+      }
+      
+      if (account.virtualBalance !== virtualBalance) {
+        setVirtualBalance(account.virtualBalance);
+      }
+      
+      if (account.walletBalance !== walletBalance) {
+        setWalletBalance(account.walletBalance);
+      }
+    }, 2000);
+    
+    return () => clearInterval(intervalId);
+  }, [accountType, virtualBalance, walletBalance]);
+
   const handleOpenNewPosition = (match: Market, action: 'buy' | 'sell') => {
     setSelectedMatch(match);
     setBetAction(action);
     setIsNewPositionModalOpen(true);
   };
 
+  // Determine which balance to display based on account type
+  const displayBalance = accountType === 'free' ? virtualBalance : walletBalance;
+
   return (
     <SpreadsProvider>
       <div className="min-h-screen bg-background text-foreground overflow-hidden">
         {/* Header */}
         <Header 
-          walletBalance={walletBalance}
+          walletBalance={displayBalance}
           onOpenWalletModal={() => setIsWalletModalOpen(true)}
           onOpenNewPositionModal={() => setIsNewPositionModalOpen(true)}
           userWallet={USER_WALLET_ADDRESS}
           webSocketService={wsRef.current}
           onBalanceUpdate={handleBalanceUpdate}
+          accountType={accountType}
         />
 
         {/* Main Content - IG Index Style */}
@@ -230,7 +321,7 @@ const Index = () => {
         <WalletModal 
           isOpen={isWalletModalOpen} 
           onClose={() => setIsWalletModalOpen(false)} 
-          balance={walletBalance}
+          balance={displayBalance}
           userWallet={USER_WALLET_ADDRESS}
           webSocketService={wsRef.current}
         />
@@ -240,6 +331,7 @@ const Index = () => {
           onClose={() => setIsNewPositionModalOpen(false)} 
           match={selectedMatch || undefined}
           action={betAction || undefined}
+          accountType={accountType}
         />
       </div>
     </SpreadsProvider>
