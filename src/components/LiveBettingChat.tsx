@@ -1,7 +1,12 @@
-
 import { useState, useEffect } from "react";
 import { MessageCircle, X, Send } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { 
+  getUserBets, 
+  partiallyCloseBet, 
+  fullyCloseBet, 
+  findBetByName 
+} from "@/utils/betUtils";
 
 const LiveBettingChat = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -36,6 +41,12 @@ const LiveBettingChat = () => {
           variant: "destructive"
         });
       });
+      
+    // Add initial welcome message from Mikey
+    setMessages([{
+      text: "👋 Hi! I'm Mikey, your AI betting assistant. I can help you place bets, check odds, or close positions. Try commands like:\n\n• 'Show NBA spreads'\n• 'Buy Lakers at 5.5 for $10/pt'\n• 'Close my Warriors bet'\n• 'Close 50% of my Lakers bet'\n\nType /help for more commands.",
+      sender: "bot"
+    }]);
   }, []);
 
   const fetchLivePrices = async (sport: string) => {
@@ -89,6 +100,146 @@ const LiveBettingChat = () => {
     }
   };
 
+  const handleClosePosition = async (userMessage: string) => {
+    setIsLoading(true);
+    try {
+      // Parse the message to identify the bet and closure percentage
+      const closeRegex = /close\s+(?:(\d+)%\s+of\s+)?(?:my\s+)?(.*?)(?:\s+bet)?$/i;
+      const match = userMessage.match(closeRegex);
+      
+      if (!match) {
+        setMessages(prev => [...prev, { 
+          text: "I couldn't understand the position closure request. Try: 'Close my Lakers bet' or 'Close 50% of my Barcelona bet'", 
+          sender: "bot" 
+        }]);
+        return;
+      }
+      
+      const percentageStr = match[1];
+      const betName = match[2].trim();
+      const percentage = percentageStr ? parseInt(percentageStr) : 100; // Default to 100% if no percentage specified
+      
+      // Find the bet
+      const matchingBets = findBetByName(betName);
+      
+      if (matchingBets.length === 0) {
+        setMessages(prev => [...prev, { 
+          text: `I couldn't find any open positions matching "${betName}". Please check the name and try again.`, 
+          sender: "bot" 
+        }]);
+        return;
+      }
+      
+      if (matchingBets.length > 1) {
+        // Multiple matches found, ask user to be more specific
+        let responseMessage = "I found multiple positions matching that name. Please be more specific:\n\n";
+        matchingBets.forEach((bet, index) => {
+          responseMessage += `${index + 1}. ${bet.matchName} - ${bet.market} (${bet.betType.toUpperCase()} @ ${bet.betPrice})\n`;
+        });
+        
+        setMessages(prev => [...prev, { text: responseMessage, sender: "bot" }]);
+        return;
+      }
+      
+      // Get the current market price - in a real app this would come from an API
+      // For now we'll simulate it with a slight deviation from the original price
+      const bet = matchingBets[0];
+      const deviation = (Math.random() * 0.2) - 0.1; // Random deviation between -10% and +10%
+      const currentPrice = bet.betPrice * (1 + deviation);
+      const formattedCurrentPrice = parseFloat(currentPrice.toFixed(2));
+      
+      // Ask for confirmation
+      const direction = percentage === 100 ? "fully close" : `close ${percentage}% of`;
+      const confirmMessage = `Are you sure you want to ${direction} your ${bet.betType.toUpperCase()} position on ${bet.matchName} (${bet.market}) at ${bet.betPrice} for ${bet.stakePerPoint}/pt?\n\nCurrent market price: ${formattedCurrentPrice}\n\nReply 'confirm' to proceed.`;
+      
+      // Store the closure details in a data attribute for later
+      setMessages(prev => [...prev, { 
+        text: confirmMessage, 
+        sender: "bot",
+        // @ts-ignore - Adding custom property for confirmation
+        confirmationData: {
+          action: "closePosition",
+          betId: bet.id,
+          percentage,
+          currentPrice: formattedCurrentPrice
+        }
+      }]);
+    } catch (error) {
+      console.error("❌ Error processing position closure:", error);
+      setMessages(prev => [...prev, { 
+        text: "There was an error processing your position closure. Please try again.", 
+        sender: "bot" 
+      }]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const processConfirmation = async (lastBotMessage: any) => {
+    if (!lastBotMessage?.confirmationData) return false;
+    
+    const { action, betId, percentage, currentPrice } = lastBotMessage.confirmationData;
+    
+    if (action === "closePosition") {
+      try {
+        setIsLoading(true);
+        
+        // Execute the position closure
+        if (percentage === 100) {
+          fullyCloseBet(betId, currentPrice);
+        } else {
+          partiallyCloseBet(betId, percentage, currentPrice);
+        }
+        
+        // Calculate P/L
+        const bets = getUserBets();
+        const updatedBet = bets.find(bet => bet.id === betId);
+        
+        if (!updatedBet) throw new Error("Bet not found after update");
+        
+        let resultMessage = "";
+        if (percentage === 100) {
+          resultMessage = `✅ Position fully closed at ${currentPrice}.\n`;
+        } else {
+          resultMessage = `✅ ${percentage}% of position closed at ${currentPrice}.\n`;
+        }
+        
+        // Add P/L information
+        const profitLoss = updatedBet.profitLoss || 0;
+        if (profitLoss > 0) {
+          resultMessage += `You made a profit of $${profitLoss.toFixed(2)}. 🎉\n`;
+        } else if (profitLoss < 0) {
+          resultMessage += `You had a loss of $${Math.abs(profitLoss).toFixed(2)}. 📉\n`;
+        } else {
+          resultMessage += `You broke even on this trade. 🤝\n`;
+        }
+        
+        // Add collateral information
+        if (updatedBet.status === "partially_closed") {
+          resultMessage += `\nRemaining position: ${updatedBet.stakeOpen}/pt\n`;
+          resultMessage += `Collateral still held: $${updatedBet.collateralHeld?.toFixed(2) || 0}`;
+        } else {
+          resultMessage += `\nAll collateral has been released.`;
+        }
+        
+        setMessages(prev => [...prev, { text: resultMessage, sender: "bot" }]);
+        
+        return true;
+      } catch (error) {
+        console.error("❌ Error executing position closure:", error);
+        setMessages(prev => [...prev, { 
+          text: "Error executing the position closure. Please try again.", 
+          sender: "bot" 
+        }]);
+        return true;
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    
+    return false;
+  };
+
   const handleSendMessage = async () => {
     if (!input.trim()) return;
     
@@ -96,8 +247,24 @@ const LiveBettingChat = () => {
     setMessages(prev => [...prev, { text: userMessage, sender: "user" }]);
     setInput("");
     
+    // Check if this is a confirmation response
+    if (userMessage.toLowerCase() === 'confirm') {
+      // Get the last bot message
+      const lastBotMessage = [...messages].reverse().find(msg => msg.sender === "bot");
+      if (lastBotMessage) {
+        const handled = await processConfirmation(lastBotMessage);
+        if (handled) return;
+      }
+    }
+    
     try {
       setIsLoading(true);
+      
+      if (userMessage.toLowerCase().startsWith('close')) {
+        // Handle position closure
+        await handleClosePosition(userMessage);
+        return;
+      }
       
       if (userMessage.startsWith('/')) {
         if (userMessage.startsWith('/buy') || userMessage.startsWith('/sell')) {
@@ -148,6 +315,9 @@ const LiveBettingChat = () => {
             text: "Available commands:\n\n" +
                   "- /buy [market] [amount]: Buy a market\n" +
                   "- /sell [market] [amount]: Sell a market\n" +
+                  "- 'Show [sport] spreads': View current markets\n" +
+                  "- 'Close [market] bet': Fully close a position\n" +
+                  "- 'Close [percentage]% of [market] bet': Partially close a position\n" +
                   "- /help: Show this help message", 
             sender: "bot" 
           }]);
@@ -224,7 +394,7 @@ const LiveBettingChat = () => {
         <div className="fixed bottom-24 right-6 bg-card border border-border rounded-lg shadow-lg w-80 sm:w-96 max-h-[32rem] flex flex-col">
           <div className="p-3 border-b border-border flex justify-between items-center">
             <div className="flex items-center">
-              <h2 className="font-semibold">🎲 Live Betting Assistant</h2>
+              <h2 className="font-semibold">🎲 Mikey - AI Betting Assistant</h2>
               {connectionStatus === "connected" ? (
                 <span className="ml-2 w-2 h-2 bg-green-500 rounded-full"></span>
               ) : connectionStatus === "connecting" ? (
@@ -247,21 +417,36 @@ const LiveBettingChat = () => {
               onClick={() => fetchLivePrices("football")}
               disabled={isLoading}
             >
-              Get Football Odds
+              Football Odds
             </button>
             <button 
               className="bg-primary/10 hover:bg-primary/20 text-primary px-3 py-1.5 rounded-full text-sm"
               onClick={() => fetchLivePrices("basketball")}
               disabled={isLoading}
             >
-              Get Basketball Odds
+              Basketball Odds
+            </button>
+            <button 
+              className="bg-primary/10 hover:bg-primary/20 text-primary px-3 py-1.5 rounded-full text-sm flex-shrink-0"
+              onClick={() => setMessages(prev => [...prev, { 
+                text: "Available commands:\n\n" +
+                      "- '/buy [market] [amount]': Buy a market\n" +
+                      "- '/sell [market] [amount]': Sell a market\n" +
+                      "- 'Close [market] bet': Fully close a position\n" +
+                      "- 'Close 50% of [market] bet': Partially close\n" +
+                      "- '/help': Show all commands", 
+                sender: "bot" 
+              }])}
+              disabled={isLoading}
+            >
+              Help
             </button>
           </div>
           
           <div className="flex-1 overflow-y-auto p-3 space-y-3 min-h-[300px] max-h-[400px]">
             {messages.length === 0 ? (
               <div className="text-center text-muted-foreground py-6">
-                <p>I'm your AI betting assistant. Ask me about odds, trends, or strategies!</p>
+                <p>I'm Mikey, your AI betting assistant. Ask me about odds, trends, or strategies!</p>
                 <p className="text-sm mt-2">Type /help for available commands</p>
               </div>
             ) : (
@@ -297,7 +482,7 @@ const LiveBettingChat = () => {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Ask about markets or type /help"
+                placeholder="Ask Mikey about bets or markets..."
                 className="flex-1 bg-background border border-input px-3 py-2 rounded-md focus:outline-none focus:ring-1 focus:ring-ring"
                 disabled={isLoading}
               />

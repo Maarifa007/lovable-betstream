@@ -1,4 +1,5 @@
 
+
 interface Bet {
   id: string;
   matchId: number | string;
@@ -7,13 +8,16 @@ interface Bet {
   betPrice: number;
   stakePerPoint: number;
   makeupLimit?: number;
-  status: 'open' | 'settled' | 'cancelled';
+  status: 'open' | 'settled' | 'cancelled' | 'partially_closed';
   finalResult?: number;
   profitLoss?: number;
   timestamp: number;
   collateralHeld?: number;
   userId?: string;
   matchName?: string;
+  stakeOpen?: number;  // Amount still live
+  stakeClosed?: number; // Amount already settled
+  currentPrice?: number; // Last known price for the market
 }
 
 /**
@@ -110,7 +114,7 @@ export const getMatchBets = (matchId: number | string): Bet[] => {
  */
 export const getOpenBets = (): Bet[] => {
   const bets = getUserBets();
-  return bets.filter(bet => bet.status === 'open');
+  return bets.filter(bet => bet.status === 'open' || bet.status === 'partially_closed');
 };
 
 /**
@@ -132,9 +136,9 @@ export const getTotalLockedCollateral = (): number => {
 /**
  * Calculate total profit/loss across all settled bets
  */
-export const getTotalProfitLoss = (): number => {
+export const getTotalProfitLoss = (): Bet[] => {
   const settledBets = getSettledBets();
-  return settledBets.reduce((total, bet) => total + (bet.profitLoss || 0), 0);
+  return settledBets;
 };
 
 /**
@@ -159,3 +163,102 @@ export const cancelBet = (betId: string): Bet[] => {
   saveBets(updatedBets);
   return updatedBets;
 };
+
+/**
+ * Partially close a position - closes a portion of the stake and recalculates collateral
+ * @param betId ID of the bet to partially close
+ * @param percentToClose Percentage of the position to close (0-100)
+ * @param currentPrice Current market price for settlement
+ * @returns Updated bets array
+ */
+export const partiallyCloseBet = (
+  betId: string, 
+  percentToClose: number, 
+  currentPrice: number
+): Bet[] => {
+  if (percentToClose <= 0 || percentToClose > 100) {
+    throw new Error("Percentage to close must be between 1 and 100");
+  }
+  
+  const bets = getUserBets();
+  const betIndex = bets.findIndex(bet => bet.id === betId);
+  
+  if (betIndex === -1) {
+    throw new Error(`Bet with ID ${betId} not found`);
+  }
+  
+  const bet = bets[betIndex];
+  
+  if (bet.status !== 'open' && bet.status !== 'partially_closed') {
+    throw new Error(`Cannot close a bet with status: ${bet.status}`);
+  }
+  
+  // Calculate what portion of the stake is being closed
+  const closingRatio = percentToClose / 100;
+  const stakeToBeClosed = bet.stakeOpen ? bet.stakeOpen * closingRatio : bet.stakePerPoint * closingRatio;
+  const stakeRemaining = bet.stakeOpen ? bet.stakeOpen - stakeToBeClosed : bet.stakePerPoint - stakeToBeClosed;
+  
+  // Calculate P/L for the closed portion
+  let profitLoss = 0;
+  if (bet.betType === 'buy') {
+    profitLoss = (currentPrice - bet.betPrice) * stakeToBeClosed;
+  } else { // sell
+    profitLoss = (bet.betPrice - currentPrice) * stakeToBeClosed;
+  }
+  
+  // If there's a makeup limit, cap the loss
+  if (bet.makeupLimit && profitLoss < 0) {
+    const maxLoss = stakeToBeClosed * bet.makeupLimit;
+    profitLoss = Math.max(profitLoss, -maxLoss);
+  }
+  
+  // Calculate new collateral based on remaining stake
+  const newCollateralHeld = bet.makeupLimit ? stakeRemaining * bet.makeupLimit : 0;
+  
+  // Update the bet
+  const updatedBet: Bet = {
+    ...bet,
+    status: stakeRemaining > 0 ? 'partially_closed' : 'settled',
+    stakeOpen: stakeRemaining,
+    stakeClosed: (bet.stakeClosed || 0) + stakeToBeClosed,
+    profitLoss: (bet.profitLoss || 0) + profitLoss,
+    collateralHeld: newCollateralHeld,
+    currentPrice
+  };
+  
+  bets[betIndex] = updatedBet;
+  saveBets(bets);
+  
+  return bets;
+};
+
+/**
+ * Fully close a position at the current market price
+ * @param betId ID of the bet to close
+ * @param currentPrice Current market price for settlement
+ * @returns Updated bets array
+ */
+export const fullyCloseBet = (betId: string, currentPrice: number): Bet[] => {
+  return partiallyCloseBet(betId, 100, currentPrice);
+};
+
+/**
+ * Find a bet by name or description
+ * @param searchTerm Search term to match against bet name or market
+ * @returns Array of matching bets
+ */
+export const findBetByName = (searchTerm: string): Bet[] => {
+  const bets = getUserBets();
+  const lowercaseSearch = searchTerm.toLowerCase();
+  
+  return bets.filter(bet => {
+    const matchName = bet.matchName?.toLowerCase() || '';
+    const market = bet.market.toLowerCase();
+    
+    return (
+      matchName.includes(lowercaseSearch) || 
+      market.includes(lowercaseSearch)
+    );
+  });
+};
+
