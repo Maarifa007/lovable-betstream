@@ -1,6 +1,6 @@
 
 import { useState, useEffect } from "react";
-import { MessageCircle, X, Send, Wallet } from "lucide-react";
+import { MessageCircle, X, Send, Wallet, Loader } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { 
   getUserBets, 
@@ -9,7 +9,8 @@ import {
   findBetByName,
   getUserAccount,
   shouldPromptUpgrade,
-  markUpgradePrompt
+  markUpgradePrompt,
+  placeBet
 } from "@/utils/betUtils";
 
 // Default user wallet address - in real app this would come from auth
@@ -320,6 +321,59 @@ const LiveBettingChat = () => {
     return false;
   };
 
+  const handlePlaceBet = (market: string, action: 'buy' | 'sell', amount: number) => {
+    try {
+      // Get user account to determine currency type
+      const userAccount = getUserAccount(USER_WALLET_ADDRESS);
+      const currencyType = userAccount.accountType === 'free' ? 'Gold Coins' : 'USDC';
+      
+      // Create the bet object
+      const bet = {
+        matchId: Math.floor(Math.random() * 1000),
+        matchName: market,
+        market: `${market} Points`,
+        betType: action,
+        betPrice: action === 'buy' ? 3.2 : 2.8,
+        stakePerPoint: amount,
+        makeupLimit: 30,
+        collateralHeld: amount * 30, // Collateral = stake * makeupLimit
+        userId: USER_WALLET_ADDRESS
+      };
+      
+      // Place the bet using the utility function
+      const newBet = placeBet(bet, USER_WALLET_ADDRESS);
+      
+      // Send confirmation message
+      setTimeout(() => {
+        setMessages(prev => [...prev, { 
+          text: `✅ You ${action === 'buy' ? 'bought' : 'sold'} ${market} at ${newBet.betPrice} for ${amount}${userAccount.accountType === 'free' ? 'GC' : 'USDC'}/pt.\nCollateral held: ${newBet.collateralHeld}${userAccount.accountType === 'free' ? 'GC' : 'USDC'} (${newBet.makeupLimit}x)`,
+          sender: "bot" 
+        }]);
+      }, 500);
+      
+      toast({
+        title: "Position Opened",
+        description: `${action.toUpperCase()} position on ${market} for ${amount} per point`,
+      });
+      
+      // If it's a free account and they've placed enough bets, prompt to upgrade
+      if (userAccount.accountType === 'free' && userAccount.betsPlaced >= 3 && !userAccount.lastPromptDate) {
+        setTimeout(() => {
+          setShowUpgradePrompt(true);
+        }, 2000);
+      }
+      
+      return true;
+    } catch (error) {
+      console.error("❌ Error placing bet:", error);
+      setMessages(prev => [...prev, { 
+        text: "There was an error placing your bet. Please try again.", 
+        sender: "bot" 
+      }]);
+      return false;
+    }
+  };
+
   const handleSendMessage = async () => {
     if (!input.trim()) return;
     
@@ -362,6 +416,31 @@ const LiveBettingChat = () => {
     try {
       setIsLoading(true);
       
+      // Check for bet placement commands
+      const buyRegex = /(?:buy|long)\s+(.*?)(?:\s+at\s+(\d+(?:\.\d+)?))?\s+(?:for\s+)?\$?(\d+)(?:\/pt)?/i;
+      const sellRegex = /(?:sell|short)\s+(.*?)(?:\s+at\s+(\d+(?:\.\d+)?))?\s+(?:for\s+)?\$?(\d+)(?:\/pt)?/i;
+      
+      const buyMatch = userMessage.match(buyRegex);
+      const sellMatch = userMessage.match(sellRegex);
+      
+      if (buyMatch) {
+        const market = buyMatch[1].trim();
+        const amount = parseInt(buyMatch[3]);
+        
+        if (market && !isNaN(amount) && amount > 0) {
+          const success = handlePlaceBet(market, 'buy', amount);
+          if (success) return;
+        }
+      } else if (sellMatch) {
+        const market = sellMatch[1].trim();
+        const amount = parseInt(sellMatch[3]);
+        
+        if (market && !isNaN(amount) && amount > 0) {
+          const success = handlePlaceBet(market, 'sell', amount);
+          if (success) return;
+        }
+      }
+      
       if (userMessage.toLowerCase().startsWith('close')) {
         // Handle position closure
         await handleClosePosition(userMessage);
@@ -371,7 +450,7 @@ const LiveBettingChat = () => {
       if (userMessage.startsWith('/')) {
         if (userMessage.startsWith('/buy') || userMessage.startsWith('/sell')) {
           const parts = userMessage.split(' ');
-          const action = parts[0].substring(1);
+          const action = parts[0].substring(1) as 'buy' | 'sell';
           const market = parts.length > 2 ? parts[1] : ""; 
           const amount = parts.length > 2 ? parseInt(parts[2]) : 0;
           
@@ -383,50 +462,7 @@ const LiveBettingChat = () => {
             return;
           }
           
-          await new Promise(resolve => setTimeout(resolve, 1000));
-          
-          // Get account type to determine currency
-          const userAccount = getUserAccount(USER_WALLET_ADDRESS);
-          const currencyType = userAccount.accountType === 'free' ? 'Gold Coins' : 'USDC';
-          
-          const betId = `bet-${Date.now()}`;
-          const bet = {
-            id: betId,
-            matchId: Math.floor(Math.random() * 1000),
-            matchName: market,
-            market: `${market} Points`,
-            betType: action as 'buy' | 'sell',
-            betPrice: action === 'buy' ? 3.2 : 2.8,
-            stakePerPoint: amount,
-            makeupLimit: 30,
-            status: 'open' as const,
-            timestamp: Date.now(),
-            accountType: userAccount.accountType
-          };
-          
-          const storedBets = localStorage.getItem('userBets');
-          const bets = storedBets ? JSON.parse(storedBets) : [];
-          localStorage.setItem('userBets', JSON.stringify([...bets, bet]));
-          
-          // Update user account - track bets placed
-          userAccount.betsPlaced += 1;
-          
-          // If it's a free account and they've placed enough bets, prompt to upgrade
-          if (userAccount.accountType === 'free' && userAccount.betsPlaced >= 3 && !userAccount.lastPromptDate) {
-            setTimeout(() => {
-              setShowUpgradePrompt(true);
-            }, 2000);
-          }
-          
-          setMessages(prev => [...prev, { 
-            text: `✅ ${action.toUpperCase()} position opened on ${market} for ${amount} ${currencyType} per point`, 
-            sender: "bot" 
-          }]);
-          
-          toast({
-            title: "Position Opened",
-            description: `${action.toUpperCase()} position on ${market} for ${amount} per point`,
-          });
+          handlePlaceBet(market, action, amount);
         } else if (userMessage.toLowerCase() === '/help') {
           // Get account type to determine currency in help message
           const userAccount = getUserAccount(USER_WALLET_ADDRESS);

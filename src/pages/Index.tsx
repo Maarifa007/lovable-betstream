@@ -43,6 +43,7 @@ const Index = () => {
   const [selectedMatch, setSelectedMatch] = useState<Market | null>(null);
   const [betAction, setBetAction] = useState<'buy' | 'sell' | null>(null);
   const [showAccountSelection, setShowAccountSelection] = useState(false);
+  const [isAppLoading, setIsAppLoading] = useState(true);
   
   const wsRef = useRef<WebSocketService | null>(null);
   const priceRefs = useRef<Record<string, HTMLDivElement>>({});
@@ -71,6 +72,11 @@ const Index = () => {
     };
     
     window.addEventListener('openWalletModal', handleOpenWalletModal);
+    
+    // Simulate loading application data
+    setTimeout(() => {
+      setIsAppLoading(false);
+    }, 1500);
     
     return () => {
       window.removeEventListener('openWalletModal', handleOpenWalletModal);
@@ -156,7 +162,8 @@ const Index = () => {
     queryKey: ['markets', selectedSport],
     queryFn: async () => fetchMarketData(selectedSport),
     retry: 3, // Retry up to 3 times if the API call fails
-    retryDelay: attemptIndex => Math.min(1000 * 2 ** attemptIndex, 30000) // Exponential retry delay
+    retryDelay: attemptIndex => Math.min(1000 * 2 ** attemptIndex, 30000), // Exponential retry delay
+    enabled: !isAppLoading // Only start fetching after initial app loading is complete
   });
 
   useEffect(() => {
@@ -279,6 +286,18 @@ const Index = () => {
   // Determine which balance to display based on account type
   const displayBalance = accountType === 'free' ? virtualBalance : walletBalance;
 
+  if (isAppLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="h-10 w-10 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <h2 className="text-xl font-medium mb-2">Getting your account ready...</h2>
+          <p className="text-muted-foreground">Loading your betting profile and market data</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <SpreadsProvider>
       <div className="min-h-screen bg-background text-foreground overflow-hidden">
@@ -320,10 +339,20 @@ const Index = () => {
         {/* Modals */}
         <WalletModal 
           isOpen={isWalletModalOpen} 
-          onClose={() => setIsWalletModalOpen(false)} 
+          onClose={() => {
+            setIsWalletModalOpen(false);
+            // Record that the user has selected an account type
+            localStorage.setItem(`account_chosen_${USER_WALLET_ADDRESS}`, "true");
+          }}
           balance={displayBalance}
           userWallet={USER_WALLET_ADDRESS}
           webSocketService={wsRef.current}
+          showAccountSelection={showAccountSelection}
+          onAccountTypeSelected={() => {
+            // When user selects account type, record it and close modal
+            localStorage.setItem(`account_chosen_${USER_WALLET_ADDRESS}`, "true");
+            setShowAccountSelection(false);
+          }}
         />
         
         <NewPositionModal 
