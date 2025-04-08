@@ -2,6 +2,7 @@ import { getUserAccount, saveUserAccount, getUserBets, saveBets } from "@/utils/
 import { closePosition, placeBet } from "@/utils/positionUtils";
 import { toast } from "@/hooks/use-toast";
 import marketScraper, { MatchData } from "@/services/marketScraperService";
+import { teamKeywords, sportTerms } from "@/utils/teamsKeywords";
 
 /**
  * Execute a trade via API
@@ -265,6 +266,82 @@ export const closePositionApi = async (data: {
  * Guess the sport based on team names in the match
  */
 function guessSportFromMatchName(matchName: string): 'football' | 'basketball' | 'tennis' | 'golf' | 'baseball' {
+  const normalizedMatch = matchName.toLowerCase();
+  
+  // Check for baseball patterns first (common format differences)
+  if (
+    normalizedMatch.includes(' at ') || // Common format for baseball games
+    /\s+vs\s+.*\s+(\d+th|\d+nd|\d+rd|\d+st)\s+inning/i.test(normalizedMatch) || // Inning references
+    /\([0-9]+-[0-9]+\)/.test(normalizedMatch) // Common baseball score format
+  ) {
+    return 'baseball';
+  }
+  
+  // Check through all teams in our keywords mapping
+  // MLB Teams
+  for (const team of teamKeywords.MLB) {
+    if (normalizedMatch.includes(team.toLowerCase())) {
+      return 'baseball';
+    }
+  }
+  
+  // NBA Teams
+  for (const team of teamKeywords.NBA) {
+    if (normalizedMatch.includes(team.toLowerCase())) {
+      return 'basketball';
+    }
+  }
+  
+  // NCAAB Teams (also basketball)
+  for (const team of teamKeywords.NCAAB) {
+    if (normalizedMatch.includes(team.toLowerCase())) {
+      return 'basketball';
+    }
+  }
+  
+  // NFL Teams
+  for (const team of teamKeywords.NFL) {
+    if (normalizedMatch.includes(team.toLowerCase())) {
+      return 'football';
+    }
+  }
+  
+  // NCAAF Teams (also football)
+  for (const team of teamKeywords.NCAAF) {
+    if (normalizedMatch.includes(team.toLowerCase())) {
+      return 'football';
+    }
+  }
+  
+  // NHL Teams (hockey - we'll map this to closest supported type)
+  for (const team of teamKeywords.NHL) {
+    if (normalizedMatch.includes(team.toLowerCase())) {
+      // Hockey isn't directly supported, so we'll default to baseball
+      // This is a compromise until hockey is fully supported
+      return 'baseball';
+    }
+  }
+  
+  // Check for sport-specific terms
+  for (const term of sportTerms.baseball) {
+    if (normalizedMatch.includes(term.toLowerCase())) {
+      return 'baseball';
+    }
+  }
+  
+  for (const term of sportTerms.basketball) {
+    if (normalizedMatch.includes(term.toLowerCase())) {
+      return 'basketball';
+    }
+  }
+  
+  for (const term of sportTerms.football) {
+    if (normalizedMatch.includes(term.toLowerCase())) {
+      return 'football';
+    }
+  }
+  
+  // Fallback to original keyword check for sports we haven't expanded yet
   const sportKeywords = {
     football: ['united', 'fc', 'city', 'arsenal', 'chelsea', 'liverpool', 'madrid', 'barcelona', 'west ham', 'leicester'],
     basketball: ['lakers', 'bulls', 'warriors', 'celtics', 'heat', 'knicks', 'bucks', 'raptors', 'nba'],
@@ -273,22 +350,12 @@ function guessSportFromMatchName(matchName: string): 'football' | 'basketball' |
     baseball: ['yankees', 'red sox', 'cubs', 'dodgers', 'astros', 'mets', 'cardinals', 'mlb', 'giants', 'braves', 'nationals', 'angels', 'blue jays', 'mariners', 'twins', 'brewers', 'phillies', 'rangers', 'padres', 'orioles', 'royals', 'athletics', 'pirates', 'marlins', 'rays', 'rockies', 'white sox', 'diamondbacks', 'tigers']
   };
   
-  const normalizedMatch = matchName.toLowerCase();
-  
   for (const [sport, keywords] of Object.entries(sportKeywords)) {
     for (const keyword of keywords) {
       if (normalizedMatch.includes(keyword)) {
         return sport as any;
       }
     }
-  }
-  
-  // Try to detect baseball teams based on common MLB patterns
-  if (
-    normalizedMatch.includes(' at ') || // Common format for baseball games
-    /\s+vs\s+.*\s+(\d+th|\d+nd|\d+rd|\d+st)\s+inning/i.test(normalizedMatch) // Inning references
-  ) {
-    return 'baseball';
   }
   
   // Default to football if no match
