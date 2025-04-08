@@ -1,4 +1,3 @@
-
 import { getUserAccount, saveUserAccount, getUserBets, saveBets } from "@/utils/betUtils";
 import { closePosition, placeBet } from "@/utils/positionUtils";
 import { toast } from "@/hooks/use-toast";
@@ -271,7 +270,7 @@ function guessSportFromMatchName(matchName: string): 'football' | 'basketball' |
     basketball: ['lakers', 'bulls', 'warriors', 'celtics', 'heat', 'knicks', 'bucks', 'raptors', 'nba'],
     tennis: ['djokovic', 'nadal', 'federer', 'murray', 'williams', 'osaka', 'atp', 'wta'],
     golf: ['woods', 'mcilroy', 'masters', 'open', 'championship', 'pga'],
-    baseball: ['yankees', 'red sox', 'cubs', 'dodgers', 'astros', 'mets', 'cardinals', 'mlb']
+    baseball: ['yankees', 'red sox', 'cubs', 'dodgers', 'astros', 'mets', 'cardinals', 'mlb', 'giants', 'braves', 'nationals', 'angels', 'blue jays', 'mariners', 'twins', 'brewers', 'phillies', 'rangers', 'padres', 'orioles', 'royals', 'athletics', 'pirates', 'marlins', 'rays', 'rockies', 'white sox', 'diamondbacks', 'tigers']
   };
   
   const normalizedMatch = matchName.toLowerCase();
@@ -282,6 +281,14 @@ function guessSportFromMatchName(matchName: string): 'football' | 'basketball' |
         return sport as any;
       }
     }
+  }
+  
+  // Try to detect baseball teams based on common MLB patterns
+  if (
+    normalizedMatch.includes(' at ') || // Common format for baseball games
+    /\s+vs\s+.*\s+(\d+th|\d+nd|\d+rd|\d+st)\s+inning/i.test(normalizedMatch) // Inning references
+  ) {
+    return 'baseball';
   }
   
   // Default to football if no match
