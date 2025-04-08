@@ -2,7 +2,7 @@
 import { getUserAccount, saveUserAccount, getUserBets, saveBets } from "@/utils/betUtils";
 import { closePosition, placeBet } from "@/utils/positionUtils";
 import { toast } from "@/hooks/use-toast";
-import marketScraper from "@/services/marketScraperService";
+import marketScraper, { MatchData } from "@/services/marketScraperService";
 
 /**
  * Execute a trade via API
@@ -26,19 +26,55 @@ export const executeTrade = async (data: {
     let price = 0;
     
     try {
-      // Try to get latest price from market scraper
-      const markets = await marketScraper.fetchMarkets(sport);
-      const matchMarket = markets.find(m => 
-        m.match.toLowerCase().includes(data.matchName.toLowerCase())
-      );
+      // Extract home and away teams from matchName
+      const [home, away] = data.matchName.split(' vs ');
       
-      if (matchMarket) {
-        price = data.action === 'buy' ? matchMarket.buyPrice : matchMarket.sellPrice;
-        console.log(`✅ Found market price: ${price} for ${data.matchName}`);
+      if (home && away) {
+        // Create match data object for specific match scraping
+        const matchData: MatchData = {
+          home,
+          away,
+          sportType: sport
+        };
+        
+        // Fetch markets specifically for this match
+        const matchMarkets = await marketScraper.fetchMatchMarkets([matchData]);
+        
+        if (matchMarkets.length > 0) {
+          // Use the first market found
+          price = data.action === 'buy' ? matchMarkets[0].buyPrice : matchMarkets[0].sellPrice;
+          console.log(`✅ Found market price: ${price} for ${data.matchName}`);
+        } else {
+          // Try to get latest price from regular market scraper
+          const markets = await marketScraper.fetchMarkets(sport);
+          const market = markets.find(m => 
+            m.match.toLowerCase().includes(data.matchName.toLowerCase())
+          );
+          
+          if (market) {
+            price = data.action === 'buy' ? market.buyPrice : market.sellPrice;
+            console.log(`✅ Found market price: ${price} for ${data.matchName}`);
+          } else {
+            // Fallback to sample prices if market not found
+            price = data.action === 'buy' ? 3.2 : 2.8;
+            console.log(`⚠️ Using fallback price: ${price} for ${data.matchName}`);
+          }
+        }
       } else {
-        // Fallback to sample prices if market not found
-        price = data.action === 'buy' ? 3.2 : 2.8;
-        console.log(`⚠️ Using fallback price: ${price} for ${data.matchName}`);
+        // If we couldn't extract home/away, fall back to regular market search
+        const markets = await marketScraper.fetchMarkets(sport);
+        const market = markets.find(m => 
+          m.match.toLowerCase().includes(data.matchName.toLowerCase())
+        );
+        
+        if (market) {
+          price = data.action === 'buy' ? market.buyPrice : market.sellPrice;
+          console.log(`✅ Found market price: ${price} for ${data.matchName}`);
+        } else {
+          // Fallback to sample prices if market not found
+          price = data.action === 'buy' ? 3.2 : 2.8;
+          console.log(`⚠️ Using fallback price: ${price} for ${data.matchName}`);
+        }
       }
     } catch (error) {
       console.error("Error getting market price:", error);
@@ -125,20 +161,62 @@ export const closePositionApi = async (data: {
     let currentPrice = 0;
     
     try {
-      // Try to get latest price from market scraper
-      const markets = await marketScraper.fetchMarkets(sport);
-      const matchMarket = markets.find(m => 
-        m.match.toLowerCase().includes(bet.matchName?.toLowerCase() || "")
-      );
-      
-      if (matchMarket) {
-        // Use the mid-price for settlement
-        currentPrice = (matchMarket.buyPrice + matchMarket.sellPrice) / 2;
-        console.log(`✅ Found market price: ${currentPrice} for ${bet.matchName}`);
+      // Extract home and away teams from matchName
+      if (bet.matchName) {
+        const [home, away] = bet.matchName.split(' vs ');
+        
+        if (home && away) {
+          // Create match data object for specific match scraping
+          const matchData: MatchData = {
+            home,
+            away,
+            sportType: sport
+          };
+          
+          // Fetch markets specifically for this match
+          const matchMarkets = await marketScraper.fetchMatchMarkets([matchData]);
+          
+          if (matchMarkets.length > 0) {
+            // Use the mid-price for settlement from the first market
+            currentPrice = (matchMarkets[0].buyPrice + matchMarkets[0].sellPrice) / 2;
+            console.log(`✅ Found market price: ${currentPrice} for ${bet.matchName}`);
+          } else {
+            // Try regular market scraper
+            const markets = await marketScraper.fetchMarkets(sport);
+            const market = markets.find(m => 
+              m.match.toLowerCase().includes(bet.matchName?.toLowerCase() || "")
+            );
+            
+            if (market) {
+              // Use the mid-price for settlement
+              currentPrice = (market.buyPrice + market.sellPrice) / 2;
+              console.log(`✅ Found market price: ${currentPrice} for ${bet.matchName}`);
+            } else {
+              // Fallback - use a price that gives a small profit
+              currentPrice = bet.betType === 'buy' ? bet.betPrice + 0.2 : bet.betPrice - 0.2;
+              console.log(`⚠️ Using fallback price: ${currentPrice} for ${bet.matchName}`);
+            }
+          }
+        } else {
+          // If we couldn't extract home/away, fall back to regular market search
+          const markets = await marketScraper.fetchMarkets(sport);
+          const market = markets.find(m => 
+            m.match.toLowerCase().includes(bet.matchName?.toLowerCase() || "")
+          );
+          
+          if (market) {
+            // Use the mid-price for settlement
+            currentPrice = (market.buyPrice + market.sellPrice) / 2;
+            console.log(`✅ Found market price: ${currentPrice} for ${bet.matchName}`);
+          } else {
+            // Fallback - use a price that gives a small profit
+            currentPrice = bet.betType === 'buy' ? bet.betPrice + 0.2 : bet.betPrice - 0.2;
+            console.log(`⚠️ Using fallback price: ${currentPrice} for ${bet.matchName}`);
+          }
+        }
       } else {
         // Fallback - use a price that gives a small profit
         currentPrice = bet.betType === 'buy' ? bet.betPrice + 0.2 : bet.betPrice - 0.2;
-        console.log(`⚠️ Using fallback price: ${currentPrice} for ${bet.matchName}`);
       }
     } catch (error) {
       console.error("Error getting market price:", error);
@@ -187,12 +265,13 @@ export const closePositionApi = async (data: {
 /**
  * Guess the sport based on team names in the match
  */
-function guessSportFromMatchName(matchName: string): 'football' | 'basketball' | 'tennis' | 'golf' {
+function guessSportFromMatchName(matchName: string): 'football' | 'basketball' | 'tennis' | 'golf' | 'baseball' {
   const sportKeywords = {
     football: ['united', 'fc', 'city', 'arsenal', 'chelsea', 'liverpool', 'madrid', 'barcelona', 'west ham', 'leicester'],
     basketball: ['lakers', 'bulls', 'warriors', 'celtics', 'heat', 'knicks', 'bucks', 'raptors', 'nba'],
     tennis: ['djokovic', 'nadal', 'federer', 'murray', 'williams', 'osaka', 'atp', 'wta'],
-    golf: ['woods', 'mcilroy', 'masters', 'open', 'championship', 'pga']
+    golf: ['woods', 'mcilroy', 'masters', 'open', 'championship', 'pga'],
+    baseball: ['yankees', 'red sox', 'cubs', 'dodgers', 'astros', 'mets', 'cardinals', 'mlb']
   };
   
   const normalizedMatch = matchName.toLowerCase();
