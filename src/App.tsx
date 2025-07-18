@@ -11,29 +11,41 @@ import LandingPage from "./pages/LandingPage";
 import ChatPage from "./pages/ChatPage";
 import Auth from "./pages/Auth";
 import BetChat from "./pages/BetChat";
+import Cricket from "./pages/sports/Cricket";
+import Football from "./pages/sports/Football";
+import Kabaddi from "./pages/sports/Kabaddi";
+import Wallet from "./pages/Wallet";
+import Promotions from "./pages/Promotions";
 import { Helmet } from "react-helmet";
+import { LanguageProvider } from "./contexts/LanguageContext";
 
 // Create a new QueryClient instance
 const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <Helmet defaultTitle="BetStream - AI-Powered Sports Trading" />
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<LandingPage />} />
-          <Route path="/app" element={<Index />} />
-          <Route path="/chat" element={<BetChat />} />
-          <Route path="/auth" element={<Auth />} />
-          <Route path="/admin" element={<Admin />} />
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </BrowserRouter>
-    </TooltipProvider>
+    <LanguageProvider>
+      <Helmet defaultTitle="BanglaBet - Betting Assistant" />
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <Routes>
+            <Route path="/" element={<LandingPage />} />
+            <Route path="/app" element={<Index />} />
+            <Route path="/chat" element={<BetChat />} />
+            <Route path="/sports/cricket" element={<Cricket />} />
+            <Route path="/sports/football" element={<Football />} />
+            <Route path="/sports/kabaddi" element={<Kabaddi />} />
+            <Route path="/wallet" element={<Wallet />} />
+            <Route path="/promotions" element={<Promotions />} />
+            <Route path="/auth" element={<Auth />} />
+            <Route path="/admin" element={<Admin />} />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </BrowserRouter>
+      </TooltipProvider>
+    </LanguageProvider>
   </QueryClientProvider>
 );
 

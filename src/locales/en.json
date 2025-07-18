@@ -37,5 +37,20 @@
   "deposit_methods": "Deposit Methods",
   "withdrawal_methods": "Withdrawal Methods",
   "chat_with_mikey": "Chat with Mikey",
-  "betting_assistant": "Your AI Betting Assistant"
+  "betting_assistant": "Your AI Betting Assistant",
+  "home": "Home",
+  "sportsbook": "Sportsbook",
+  "browse_sportsbook": "Browse Sportsbook",
+  "hero_title": "Bet with Mikey - Your AI Assistant",
+  "hero_subtitle": "Chat-first betting on Cricket, Football, Kabaddi & more",
+  "claim_bonus": "CLAIM BONUS",
+  "bet_now": "BET NOW",
+  "welcome_mikey": "Welcome! Bet with cash today.",
+  "bonus_banner": "200% Bonus! No Time Limit",
+  "play_sports": "Play Cricket, Soccer, Kabaddi!",
+  "currency_symbol": "৳",
+  "deposit_win_format": "Deposit {depositAmount} – Get {bonusAmount} Bonus!",
+  "bet_win_format": "Bet {betAmount} → Win {winAmount}",
+  "tennis": "Tennis",
+  "basketball": "Basketball"
 }

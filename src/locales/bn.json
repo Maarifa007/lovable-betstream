@@ -37,5 +37,20 @@
   "deposit_methods": "জমার পদ্ধতি",
   "withdrawal_methods": "উত্তোলনের পদ্ধতি",
   "chat_with_mikey": "মিকির সাথে চ্যাট করুন",
-  "betting_assistant": "আপনার AI বেটিং সহায়ক"
+  "betting_assistant": "আপনার AI বেটিং সহায়ক",
+  "home": "হোম",
+  "sportsbook": "স্পোর্টসবুক",
+  "browse_sportsbook": "স্পোর্টসবুক ব্রাউজ করুন",
+  "hero_title": "মিকির সাথে বাজি - আপনার AI সহায়ক",
+  "hero_subtitle": "ক্রিকেট, ফুটবল, কাবাডি এবং আরো অনেকে চ্যাট-ফার্স্ট বেটিং",
+  "claim_bonus": "বোনাস পান করুন",
+  "bet_now": "এখনি বাজি ধরুন",
+  "welcome_mikey": "স্বাগতম! আজ নগদ দিয়ে বাজি ধরুন।",
+  "bonus_banner": "২০০% বোনাস! সময়ের সীমা নেই",
+  "play_sports": "খেলুন ক্রিকেট, ফুটবল, কাবাডি!",
+  "currency_symbol": "৳",
+  "deposit_win_format": "জমা দিন {depositAmount} - পান {bonusAmount} বোনাস!",
+  "bet_win_format": "বাজি {betAmount} → জিতুন {winAmount}",
+  "tennis": "টেনিস",
+  "basketball": "বাস্কেটবল"
 }
