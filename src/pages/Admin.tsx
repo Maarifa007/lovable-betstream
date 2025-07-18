@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import AdminSpreads from '@/components/AdminSpreads';
 import AdminDashboard from '@/components/AdminDashboard';
+import AdminWalletDashboard from '@/components/AdminWalletDashboard';
 import AdminRiskDashboard from '@/components/AdminRiskDashboard';
 import AdminRiskAlerts from '@/components/AdminRiskAlerts';
 import AdminSpreadAdjustment from '@/components/AdminSpreadAdjustment';
@@ -65,6 +66,10 @@ const Admin = () => {
                   <BarChart3 className="h-4 w-4 mr-2" />
                   Analytics Dashboard
                 </TabsTrigger>
+                <TabsTrigger value="wallet">
+                  <Wallet className="h-4 w-4 mr-2" />
+                  Wallet Management
+                </TabsTrigger>
                 <TabsTrigger value="risk">
                   <AlertTriangle className="h-4 w-4 mr-2" />
                   Risk Monitoring ({exposureAlerts.length})
@@ -85,6 +90,10 @@ const Admin = () => {
               
               <TabsContent value="dashboard">
                 <AdminDashboard />
+              </TabsContent>
+              
+              <TabsContent value="wallet">
+                <AdminWalletDashboard />
               </TabsContent>
               
               <TabsContent value="risk">

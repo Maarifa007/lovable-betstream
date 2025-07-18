@@ -284,6 +284,63 @@ export type Database = {
         }
         Relationships: []
       }
+      interest_payouts: {
+        Row: {
+          amount: number
+          apy_rate: number
+          balance_snapshot: number
+          created_at: string
+          id: string
+          payout_date: string
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          apy_rate: number
+          balance_snapshot: number
+          created_at?: string
+          id?: string
+          payout_date: string
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          apy_rate?: number
+          balance_snapshot?: number
+          created_at?: string
+          id?: string
+          payout_date?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      interest_settings: {
+        Row: {
+          apy_rate: number | null
+          created_at: string
+          enabled: boolean
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          apy_rate?: number | null
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          apy_rate?: number | null
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       payments: {
         Row: {
           amount: number
@@ -763,11 +820,54 @@ export type Database = {
         }
         Relationships: []
       }
+      withdrawal_requests: {
+        Row: {
+          admin_notes: string | null
+          amount: number
+          created_at: string
+          id: string
+          method: string
+          processed_at: string | null
+          processed_by: string | null
+          status: string
+          user_id: string
+          wallet_address: string | null
+        }
+        Insert: {
+          admin_notes?: string | null
+          amount: number
+          created_at?: string
+          id?: string
+          method: string
+          processed_at?: string | null
+          processed_by?: string | null
+          status?: string
+          user_id: string
+          wallet_address?: string | null
+        }
+        Update: {
+          admin_notes?: string | null
+          amount?: number
+          created_at?: string
+          id?: string
+          method?: string
+          processed_at?: string | null
+          processed_by?: string | null
+          status?: string
+          user_id?: string
+          wallet_address?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
+      calculate_daily_interest: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
       calculate_gscr_rating: {
         Args: {
           player_rating: number
