@@ -88,8 +88,8 @@ function detectIntent(message: string): string {
 
 function handleGreeting(language: string) {
   const messages = {
-    en: "Hello! I'm Mikey, your AI betting assistant. I can help you with:\n• Check today's odds\n• Place bets\n• Manage your wallet\n• Answer questions about sports\n\nWhat would you like to do?",
-    bn: "নমস্কার! আমি মিকি, আপনার AI বেটিং সহায়ক। আমি আপনাকে সাহায্য করতে পারি:\n• আজকের অডস দেখতে\n• বেট রাখতে\n• আপনার ওয়ালেট পরিচালনা করতে\n• খেলাধুলা সম্পর্কে প্রশ্নের উত্তর দিতে\n\nআপনি কী করতে চান?"
+    en: "Welcome to BanglaBet! Please deposit to begin betting on Cricket, Soccer, Kabaddi, and more. I can help you with:\n• Deposit funds (USDT, bKash, Nagad)\n• Check today's odds\n• Place real-money bets\n• 200% Welcome Bonus (25x wagering, no time limit)\n\nWhat would you like to do?",
+    bn: "স্বাগতম BanglaBet-এ! বাজি ধরতে অ্যাকাউন্টে টাকা জমা দিন। আমি সাহায্য করতে পারি:\n• টাকা জমা (USDT, bKash, Nagad)\n• আজকের অডস দেখতে\n• সত্যিকারের টাকা দিয়ে বাজি ধরতে\n• ২০০% স্বাগত বোনাস (২৫ গুণ বাজির শর্ত, সময়ের সীমা নেই)\n\nআপনি কী করতে চান?"
   };
   
   return {
@@ -112,8 +112,8 @@ function handleBalanceQuery(balance: number, language: string) {
 
 function handleDepositQuery(message: string, language: string, balance: number) {
   const messages = {
-    en: `Your current balance is ৳${balance.toLocaleString()}. You can deposit using bKash, Nagad, or USDT. Choose your preferred method:`,
-    bn: `আপনার বর্তমান ব্যালেন্স ৳${balance.toLocaleString()}। আপনি bKash, Nagad, অথবা USDT দিয়ে টাকা জমা দিতে পারেন। আপনার পছন্দের মাধ্যম বেছে নিন:`
+    en: `Your current balance is ৳${balance.toLocaleString()}. Deposit required to place bets. You can fund using USDT, bKash, or Nagad. Which do you prefer? (200% Welcome Bonus available on first deposit)`,
+    bn: `আপনার বর্তমান ব্যালেন্স ৳${balance.toLocaleString()}। বাজি ধরতে জমা প্রয়োজন। আপনি USDT, bKash বা Nagad দিয়ে জমা দিতে পারেন। কোনটি ব্যবহার করতে চান? (প্রথম জমায় ২০০% বোনাস পাওয়া যাবে)`
   };
   
   return {
@@ -207,8 +207,8 @@ async function callOpenAI(message: string, language: string, userBalance: number
 
   try {
     const systemPrompt = language === 'bn' 
-      ? `আপনি মিকি, একটি বাংলাদেশী স্পোর্টস বেটিং AI সহায়ক। আপনি বাংলা এবং ইংরেজি দুটি ভাষায় কথা বলতে পারেন। আপনি সাহায্য করেন বেটিং, অডস, ডিপোজিট এবং স্পোর্টস নিয়ে। সংক্ষিপ্ত এবং সহায়ক উত্তর দিন। ব্যবহারকারীর ব্যালেন্স: ৳${userBalance}`
-      : `You are Mikey, a Bangladeshi sports betting AI assistant. You speak both Bengali and English. You help with betting, odds, deposits, and sports. Give concise, helpful responses. User balance: ৳${userBalance}`;
+      ? `আপনি মিকি, একটি বাংলাদেশী সত্যিকারের টাকার বেটিং AI সহায়ক। শুধুমাত্র আসল টাকা দিয়ে বাজি ধরা যায়। বাজি ধরতে জমা প্রয়োজন। ২০০% স্বাগত বোনাস প্রথম জমায়। USDT, bKash, Nagad গ্রহণযোগ্য। কোনো বিনামূল্যে খেলা নেই। ব্যবহারকারীর ব্যালেন্স: ৳${userBalance}`
+      : `You are Mikey, a Bangladeshi real-money sports betting AI assistant. Only real money betting - deposit required to place bets. 200% Welcome Bonus on first deposit. Accept USDT, bKash, Nagad. No free play. No sweepstakes. User balance: ৳${userBalance}`;
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',

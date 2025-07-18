@@ -8,6 +8,7 @@ import { Send, Wallet, TrendingUp, DollarSign, Settings, Bot, User, CreditCard }
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { useTranslation } from '@/contexts/LanguageContext';
 
 interface Message {
   id: string;
@@ -49,7 +50,7 @@ export default function MikeyChat({ userBalance, onDepositRequest, onBetPlaced }
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [language, setLanguage] = useState<'en' | 'bn'>('en');
+  const { language, setLanguage, t } = useTranslation();
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {

@@ -9,6 +9,7 @@ import { Progress } from '@/components/ui/progress';
 import { CreditCard, Smartphone, Coins, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownLeft, Wallet, Gift } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { useTranslation } from '@/contexts/LanguageContext';
 
 interface Transaction {
   id: string;
@@ -26,6 +27,7 @@ interface WalletDashboardProps {
 }
 
 export default function WalletDashboard({ userId, balance, onBalanceUpdate }: WalletDashboardProps) {
+  const { t } = useTranslation();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [depositAmount, setDepositAmount] = useState('');
   const [withdrawAmount, setWithdrawAmount] = useState('');
