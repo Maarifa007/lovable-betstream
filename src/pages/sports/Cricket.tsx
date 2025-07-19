@@ -4,7 +4,7 @@ import { useTranslation } from '@/contexts/LanguageContext';
 import { LanguageToggle } from '@/components/LanguageToggle';
 import { BottomNavigation } from '@/components/BottomNavigation';
 import SportsNavigation from '@/components/SportsNavigation';
-import { WalletPreview } from '@/components/WalletPreview';
+import WalletPreview from '@/components/WalletPreview';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 
@@ -104,7 +104,7 @@ const Cricket = () => {
         </div>
 
         {/* Wallet Preview */}
-        <WalletPreview balance={0} />
+        <WalletPreview userId="guest" onOpenFullWallet={() => {}} />
 
         {/* Bottom Navigation */}
         <BottomNavigation />

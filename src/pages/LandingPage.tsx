@@ -8,7 +8,7 @@ import { MessageCircle, Trophy, ArrowRight } from "lucide-react";
 import { useTranslation } from "@/contexts/LanguageContext";
 import { LanguageToggle } from "@/components/LanguageToggle";
 import { BottomNavigation } from "@/components/BottomNavigation";
-import { WalletPreview } from "@/components/WalletPreview";
+import WalletPreview from "@/components/WalletPreview";
 
 const LandingPage = () => {
   const { t, language } = useTranslation();
@@ -131,8 +131,8 @@ const LandingPage = () => {
 
         {/* Wallet Preview */}
         <WalletPreview 
-          balance={walletBalance}
-          onDeposit={handleDeposit}
+          userId="guest"
+          onOpenFullWallet={handleDeposit}
         />
 
         {/* Bottom Navigation */}

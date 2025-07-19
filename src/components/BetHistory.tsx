@@ -2,6 +2,8 @@
 import { useState, useEffect } from "react";
 import { ArrowDown, ArrowUp, Clock } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
+import { useTranslation } from "@/contexts/LanguageContext";
 
 interface Bet {
   id: string;
@@ -38,20 +40,63 @@ const formatDate = (timestamp: number): string => {
   return new Date(timestamp).toLocaleString();
 };
 
-const BetHistory = () => {
+interface BetHistoryProps {
+  userId?: string;
+}
+
+const BetHistory = ({ userId }: BetHistoryProps) => {
+  const { t } = useTranslation();
   const [bets, setBets] = useState<Bet[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
   useEffect(() => {
-    // Load bets from localStorage
-    const loadBets = () => {
+    loadBets();
+  }, [userId]);
+
+  const loadBets = async () => {
+    try {
+      if (userId) {
+        // Load from database using Supabase
+        const { data: predictions, error } = await supabase
+          .from('predictions')
+          .select('*')
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false });
+
+        if (error) throw error;
+
+        if (predictions) {
+          // Convert predictions to bet format
+          const formattedBets: Bet[] = predictions.map((pred: any) => ({
+            id: pred.id,
+            matchId: 1, // Default value
+            market: pred.prediction_data?.market || 'Unknown Market',
+            betType: (pred.prediction_data?.type === 'sell' ? 'sell' : 'buy') as 'buy' | 'sell',
+            betPrice: pred.prediction_data?.price || 0,
+            stakePerPoint: pred.bet_amount,
+            status: (pred.status === 'pending' ? 'open' : 'settled') as 'open' | 'settled',
+            finalResult: pred.actual_payout ? pred.prediction_data?.finalResult : undefined,
+            profitLoss: pred.actual_payout || undefined,
+            timestamp: new Date(pred.created_at).getTime()
+          }));
+          setBets(formattedBets);
+        }
+      } else {
+        // Fallback to localStorage for non-authenticated users
+        const storedBets = JSON.parse(localStorage.getItem('userBets') || '[]');
+        setBets(storedBets);
+      }
+    } catch (error) {
+      console.error('Error loading bet history:', error);
+      // Fallback to localStorage
       const storedBets = JSON.parse(localStorage.getItem('userBets') || '[]');
       setBets(storedBets);
+    } finally {
       setLoading(false);
-    };
+    }
+  };
 
-    loadBets();
-
+  useEffect(() => {
     // Set up an interval to check for bets that need to be settled (for demo purposes)
     const interval = setInterval(() => {
       const updatedBets = JSON.parse(localStorage.getItem('userBets') || '[]');

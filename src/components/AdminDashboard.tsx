@@ -118,11 +118,7 @@ const AdminDashboard: React.FC = () => {
         </TabsContent>
         
         <TabsContent value="withdrawals">
-          <WithdrawalApproval 
-            withdrawalRequests={withdrawalRequests}
-            onApprove={handleApproveWithdrawal}
-            onReject={handleRejectWithdrawal}
-          />
+          <WithdrawalApproval />
         </TabsContent>
       </Tabs>
     </div>

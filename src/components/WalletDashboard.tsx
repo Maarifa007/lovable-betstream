@@ -42,33 +42,37 @@ export default function WalletDashboard({ userId, balance, onBalanceUpdate }: Wa
 
   const loadWalletData = async () => {
     try {
-      // Load wallet info
-      const { data: wallet } = await supabase
-        .from('wallets')
-        .select('*')
-        .eq('user_id', userId)
-        .single();
+      // Load wallet balance using edge function
+      const { data: walletData, error: walletError } = await supabase.functions.invoke('wallet-balance', {
+        body: { userId }
+      });
 
-      if (wallet) {
-        setTotalDeposited(wallet.total_deposited || 0);
-        setTotalWithdrawn(wallet.total_withdrawn || 0);
+      if (walletError) throw walletError;
+
+      if (walletData) {
+        setTotalDeposited(walletData.totalDeposited || 0);
+        setTotalWithdrawn(walletData.totalWithdrawn || 0);
         
         // Calculate bonus progress (200% bonus example)
-        const bonusEligible = wallet.total_deposited * 2;
-        const currentBalance = wallet.bet_points || 0;
+        const bonusEligible = walletData.totalDeposited * 2;
+        const currentBalance = walletData.betPoints || 0;
         setBonusProgress(Math.min((currentBalance / bonusEligible) * 100, 100));
       }
 
-      // Load transactions
-      const { data: txns } = await supabase
-        .from('wallet_transactions')
-        .select('*')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false })
-        .limit(20);
+      // Load transaction history using edge function
+      const { data: historyData, error: historyError } = await supabase.functions.invoke('wallet-history', {
+        body: { 
+          userId, 
+          filter: 'all',
+          limit: 20,
+          offset: 0
+        }
+      });
 
-      if (txns) {
-        setTransactions(txns.map(tx => ({
+      if (historyError) throw historyError;
+
+      if (historyData?.transactions) {
+        setTransactions(historyData.transactions.map((tx: any) => ({
           id: tx.id,
           amount: tx.amount,
           type: tx.transaction_type as any,
@@ -79,6 +83,11 @@ export default function WalletDashboard({ userId, balance, onBalanceUpdate }: Wa
       }
     } catch (error) {
       console.error('Error loading wallet data:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load wallet data",
+        variant: "destructive"
+      });
     }
   };
 
