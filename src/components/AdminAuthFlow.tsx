@@ -23,8 +23,8 @@ const AdminAuthFlow: React.FC = () => {
     setIsAuthenticated(false);
   };
 
-  // Import AdminDashboard dynamically to avoid circular imports
-  const AdminDashboard = React.lazy(() => import('./AdminDashboard'));
+  // Import the full Admin component instead of basic AdminDashboard
+  const Admin = React.lazy(() => import('../pages/Admin'));
   
   if (!isAuthenticated) {
     return <AdminLogin onSuccess={handleLoginSuccess} />;
@@ -41,7 +41,7 @@ const AdminAuthFlow: React.FC = () => {
         </button>
       </div>
       <React.Suspense fallback={<div>Loading...</div>}>
-        <AdminDashboard />
+        <Admin />
       </React.Suspense>
     </div>
   );
