@@ -154,5 +154,11 @@ verify_jwt = true
 [functions.wallet-interest-toggle]
 verify_jwt = true
 
+[functions.auto-grade-events]
+verify_jwt = false
+
+[functions.auto-grade-cron]
+verify_jwt = false
+
 [edge_runtime]
 policy = "per_worker"

@@ -59,6 +59,123 @@ export type Database = {
           },
         ]
       }
+      auto_grading_config: {
+        Row: {
+          created_at: string
+          enabled: boolean
+          id: string
+          polling_interval_seconds: number
+          supported_sports: string[]
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          polling_interval_seconds?: number
+          supported_sports?: string[]
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          polling_interval_seconds?: number
+          supported_sports?: string[]
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      auto_grading_logs: {
+        Row: {
+          error_message: string | null
+          event_id: string
+          final_result: number | null
+          grading_method: string
+          id: string
+          positions_graded: number
+          processed_at: string
+          sport_type: string
+          status: string
+          total_payout: number
+        }
+        Insert: {
+          error_message?: string | null
+          event_id: string
+          final_result?: number | null
+          grading_method?: string
+          id?: string
+          positions_graded?: number
+          processed_at?: string
+          sport_type: string
+          status?: string
+          total_payout?: number
+        }
+        Update: {
+          error_message?: string | null
+          event_id?: string
+          final_result?: number | null
+          grading_method?: string
+          id?: string
+          positions_graded?: number
+          processed_at?: string
+          sport_type?: string
+          status?: string
+          total_payout?: number
+        }
+        Relationships: []
+      }
+      bet_positions: {
+        Row: {
+          bet_price: number
+          bet_type: string
+          created_at: string
+          final_result: number | null
+          id: string
+          market: string
+          match_id: string
+          potential_payout: number
+          profit_loss: number | null
+          settled_at: string | null
+          stake_amount: number
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          bet_price: number
+          bet_type: string
+          created_at?: string
+          final_result?: number | null
+          id?: string
+          market: string
+          match_id: string
+          potential_payout: number
+          profit_loss?: number | null
+          settled_at?: string | null
+          stake_amount: number
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          bet_price?: number
+          bet_type?: string
+          created_at?: string
+          final_result?: number | null
+          id?: string
+          market?: string
+          match_id?: string
+          potential_payout?: number
+          profit_loss?: number | null
+          settled_at?: string | null
+          stake_amount?: number
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       contests: {
         Row: {
           created_at: string
