@@ -7,13 +7,14 @@ import AdminRiskDashboard from '@/components/AdminRiskDashboard';
 import AdminRiskAlerts from '@/components/AdminRiskAlerts';
 import AdminSpreadAdjustment from '@/components/AdminSpreadAdjustment';
 import AdminNotificationsSettings from '@/components/AdminNotificationsSettings';
+import AdminMarketManager from '@/components/AdminMarketManager';
 import HistoricalExposure from '@/components/HistoricalExposure';
 import Header from '@/components/Header';
 import LiveBettingChat from '@/components/LiveBettingChat';
 import { SpreadsProvider } from '@/contexts/SpreadsContext';
 import { NotificationProvider } from '@/contexts/NotificationContext';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { AlertTriangle, BarChart3, Bell, History, PanelLeft, Wallet } from "lucide-react";
+import { AlertTriangle, BarChart3, Bell, History, PanelLeft, Wallet, Trophy } from "lucide-react";
 
 const Admin = () => {
   const [walletBalance] = useState<number>(10000);
@@ -61,30 +62,34 @@ const Admin = () => {
             <h1 className="text-2xl font-bold mb-6">Admin Dashboard</h1>
             
             <Tabs defaultValue="dashboard">
-              <TabsList className="mb-6">
+              <TabsList className="mb-6 grid w-full grid-cols-7">
                 <TabsTrigger value="dashboard">
                   <BarChart3 className="h-4 w-4 mr-2" />
-                  Analytics Dashboard
+                  Analytics
                 </TabsTrigger>
                 <TabsTrigger value="wallet">
                   <Wallet className="h-4 w-4 mr-2" />
-                  Wallet Management
+                  Wallet
+                </TabsTrigger>
+                <TabsTrigger value="markets">
+                  <Trophy className="h-4 w-4 mr-2" />
+                  Markets
                 </TabsTrigger>
                 <TabsTrigger value="risk">
                   <AlertTriangle className="h-4 w-4 mr-2" />
-                  Risk Monitoring ({exposureAlerts.length})
+                  Risk ({exposureAlerts.length})
                 </TabsTrigger>
                 <TabsTrigger value="spreads">
                   <PanelLeft className="h-4 w-4 mr-2" />
-                  Manage Spreads
+                  Spreads
                 </TabsTrigger>
                 <TabsTrigger value="history">
                   <History className="h-4 w-4 mr-2" />
-                  Historical Exposure
+                  History
                 </TabsTrigger>
                 <TabsTrigger value="settings">
                   <Bell className="h-4 w-4 mr-2" />
-                  Notifications
+                  Settings
                 </TabsTrigger>
               </TabsList>
               
@@ -94,6 +99,10 @@ const Admin = () => {
               
               <TabsContent value="wallet">
                 <AdminWalletDashboard />
+              </TabsContent>
+              
+              <TabsContent value="markets">
+                <AdminMarketManager />
               </TabsContent>
               
               <TabsContent value="risk">

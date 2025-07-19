@@ -6,10 +6,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Progress } from '@/components/ui/progress';
-import { CreditCard, Smartphone, Coins, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownLeft, Wallet, Gift } from 'lucide-react';
+import { CreditCard, Smartphone, Coins, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownLeft, Wallet, Gift, Send } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useTranslation } from '@/contexts/LanguageContext';
+import WalletTransactionHistory from './WalletTransactionHistory';
+import WalletTransferModal from './WalletTransferModal';
 
 interface Transaction {
   id: string;
@@ -263,9 +265,11 @@ export default function WalletDashboard({ userId, balance, onBalanceUpdate }: Wa
 
       {/* Deposit/Withdraw */}
       <Tabs defaultValue="deposit" className="w-full">
-        <TabsList className="grid w-full grid-cols-2">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="deposit">Deposit</TabsTrigger>
           <TabsTrigger value="withdraw">Withdraw</TabsTrigger>
+          <TabsTrigger value="transfer">Transfer</TabsTrigger>
+          <TabsTrigger value="history">History</TabsTrigger>
         </TabsList>
         
         <TabsContent value="deposit" className="space-y-4">
@@ -348,44 +352,57 @@ export default function WalletDashboard({ userId, balance, onBalanceUpdate }: Wa
             </CardContent>
           </Card>
         </TabsContent>
-      </Tabs>
-
-      {/* Transaction History */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Recent Transactions</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-3">
-            {transactions.length === 0 ? (
-              <p className="text-center text-muted-foreground py-4">No transactions yet</p>
-            ) : (
-              transactions.map((transaction) => (
-                <div key={transaction.id} className="flex items-center justify-between py-2">
-                  <div className="flex items-center space-x-3">
-                    {getTransactionIcon(transaction.type)}
-                    <div>
-                      <p className="text-sm font-medium">{transaction.description}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {transaction.timestamp.toLocaleDateString()} {transaction.timestamp.toLocaleTimeString()}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className={`text-sm font-medium ${getTransactionColor(transaction.type)}`}>
-                      {transaction.type.includes('deposit') || transaction.type.includes('win') || transaction.type.includes('bonus') ? '+' : '-'}
-                      ৳{Math.abs(transaction.amount).toLocaleString()}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      Balance: ৳{transaction.balance_after.toLocaleString()}
-                    </p>
-                  </div>
+        
+        <TabsContent value="transfer" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Send Money</CardTitle>
+              <CardDescription>Transfer funds to another user instantly</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="text-center py-8">
+                <div className="mx-auto w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mb-4">
+                  <Send className="h-8 w-8 text-primary" />
                 </div>
-              ))
-            )}
-          </div>
-        </CardContent>
-      </Card>
+                <h3 className="text-lg font-semibold mb-2">Transfer Money</h3>
+                <p className="text-muted-foreground mb-4">
+                  Send funds to friends, family, or other users instantly with zero fees
+                </p>
+                
+                <WalletTransferModal
+                  userId={userId}
+                  currentBalance={balance}
+                  onTransferComplete={loadWalletData}
+                >
+                  <Button className="w-full max-w-sm">
+                    <Send className="h-4 w-4 mr-2" />
+                    Send Money
+                  </Button>
+                </WalletTransferModal>
+              </div>
+              
+              <div className="grid grid-cols-3 gap-4 text-center pt-4 border-t">
+                <div>
+                  <p className="text-2xl font-bold text-green-600">₿0</p>
+                  <p className="text-xs text-muted-foreground">Transfer Fee</p>
+                </div>
+                <div>
+                  <p className="text-2xl font-bold">⚡</p>
+                  <p className="text-xs text-muted-foreground">Instant</p>
+                </div>
+                <div>
+                  <p className="text-2xl font-bold">🔒</p>
+                  <p className="text-xs text-muted-foreground">Secure</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="history" className="space-y-4">
+          <WalletTransactionHistory userId={userId} />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
