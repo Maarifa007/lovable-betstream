@@ -25,6 +25,8 @@ interface Contest {
   max_participants: number;
   status: string;
   created_at: string;
+  updated_at?: string;
+  result?: string;
 }
 
 interface Market {
@@ -441,46 +443,129 @@ export default function AdminMarketManager() {
             </TabsContent>
 
             <TabsContent value="grading" className="space-y-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Grade Contest Results</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div>
-                    <Label htmlFor="contest_select">Select Contest</Label>
-                    <Select 
-                      value={gradingForm.contestId}
-                      onValueChange={(value) => setGradingForm({ ...gradingForm, contestId: value })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Choose a contest to grade" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {contests.filter(c => c.status === 'completed').map((contest) => (
-                          <SelectItem key={contest.id} value={contest.id}>
-                            {contest.title} - {new Date(contest.start_time).toLocaleDateString()}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Contest Grading Form */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Target className="h-5 w-5" />
+                      Grade Contest Results
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div>
+                      <Label htmlFor="contest_select">Select Contest to Grade</Label>
+                      <Select 
+                        value={gradingForm.contestId}
+                        onValueChange={(value) => setGradingForm({ ...gradingForm, contestId: value })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Choose a contest to grade" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {contests.filter(c => c.status === 'completed' && !c.result).map((contest) => (
+                            <SelectItem key={contest.id} value={contest.id}>
+                              <div className="flex flex-col">
+                                <span className="font-medium">{contest.title}</span>
+                                <span className="text-xs text-muted-foreground">
+                                  {new Date(contest.start_time).toLocaleDateString()} • ৳{contest.prize_pool} pool
+                                </span>
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
 
-                  <div>
-                    <Label htmlFor="result">Contest Result</Label>
-                    <Textarea
-                      id="result"
-                      value={gradingForm.result}
-                      onChange={(e) => setGradingForm({ ...gradingForm, result: e.target.value })}
-                      placeholder="Enter the final result (e.g., Liverpool 2-1 Chelsea)"
-                    />
-                  </div>
+                    {gradingForm.contestId && (
+                      <>
+                        <div className="bg-muted/50 p-4 rounded-lg space-y-2">
+                          <h4 className="font-medium">Contest Details</h4>
+                          {(() => {
+                            const selectedContest = contests.find(c => c.id === gradingForm.contestId);
+                            return selectedContest ? (
+                              <div className="grid grid-cols-2 gap-2 text-sm">
+                                <div>Sport: {selectedContest.sport_type}</div>
+                                <div>Entry Fee: ৳{selectedContest.entry_fee}</div>
+                                <div>Prize Pool: ৳{selectedContest.prize_pool}</div>
+                                <div>Max Players: {selectedContest.max_participants}</div>
+                              </div>
+                            ) : null;
+                          })()}
+                        </div>
 
-                  <Button onClick={gradeContest} className="w-full">
-                    <Target className="h-4 w-4 mr-2" />
-                    Grade Contest & Process Payouts
-                  </Button>
-                </CardContent>
-              </Card>
+                        <div>
+                          <Label htmlFor="result">Final Contest Result</Label>
+                          <Textarea
+                            id="result"
+                            value={gradingForm.result}
+                            onChange={(e) => setGradingForm({ ...gradingForm, result: e.target.value })}
+                            placeholder="Enter the final result (e.g., Liverpool 2-1 Chelsea, Team A wins, Over 2.5 goals)"
+                            rows={3}
+                          />
+                          <p className="text-xs text-muted-foreground mt-1">
+                            This result will be used to determine winners and process payouts automatically.
+                          </p>
+                        </div>
+
+                        <Alert>
+                          <AlertDescription>
+                            <strong>Warning:</strong> Grading cannot be undone. Ensure the result is accurate before proceeding.
+                            All winning predictions will receive automatic payouts.
+                          </AlertDescription>
+                        </Alert>
+
+                        <Button 
+                          onClick={gradeContest} 
+                          className="w-full"
+                          disabled={!gradingForm.result.trim()}
+                        >
+                          <Target className="h-4 w-4 mr-2" />
+                          Grade Contest & Process Payouts
+                        </Button>
+                      </>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* Previously Graded Contests */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Trophy className="h-5 w-5" />
+                      Recently Graded Contests
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-3">
+                      {contests.filter(c => c.result).length === 0 ? (
+                        <Alert>
+                          <AlertDescription>
+                            No contests have been graded yet.
+                          </AlertDescription>
+                        </Alert>
+                      ) : (
+                        contests
+                          .filter(c => c.result)
+                          .slice(0, 5)
+                          .map((contest) => (
+                            <div key={contest.id} className="border rounded-lg p-4 space-y-2">
+                              <div className="flex items-center justify-between">
+                                <h4 className="font-medium text-sm">{contest.title}</h4>
+                                <Badge className="bg-green-100 text-green-800">Graded</Badge>
+                              </div>
+                              <div className="text-sm text-muted-foreground">
+                                <p><strong>Result:</strong> {contest.result}</p>
+                                <p><strong>Prize Pool:</strong> ৳{contest.prize_pool}</p>
+                                <p><strong>Graded:</strong> {new Date(contest.updated_at).toLocaleDateString()}</p>
+                              </div>
+                            </div>
+                          ))
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
             </TabsContent>
           </Tabs>
         </CardContent>
