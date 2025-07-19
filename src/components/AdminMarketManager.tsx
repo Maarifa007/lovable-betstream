@@ -12,6 +12,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Plus, Settings, Trophy, Calendar, Clock, DollarSign, Users, Target } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import OddsAPISettings from './OddsAPISettings';
 
 interface Contest {
   id: string;
@@ -570,6 +571,8 @@ export default function AdminMarketManager() {
           </Tabs>
         </CardContent>
       </Card>
+      
+      <OddsAPISettings />
     </div>
   );
 }

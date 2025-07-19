@@ -9,6 +9,13 @@ export interface MarketData {
   buyPrice: number;
   sellPrice: number;
   matchTime: string;
+  homeTeam?: string;
+  awayTeam?: string;
+  odds?: {
+    home: number;
+    away: number;
+    draw?: number;
+  };
 }
 
 // Simulated market data for different sports
@@ -85,13 +92,24 @@ export function useMarketData(sport: string = 'football') {
     setError(null);
     
     try {
-      // In a real app, this would be an API call to your backend
-      // which would then use Puppeteer or similar to scrape data
+      // Try to fetch from OddsAPI via edge function first
+      const { supabase } = await import('@/integrations/supabase/client');
       
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      console.log(`Fetching live odds for ${sportType} from OddsAPI`);
       
-      // Return simulated data for the requested sport
+      const { data: liveData, error: apiError } = await supabase.functions.invoke('odds-api', {
+        body: { sport: sportType }
+      });
+
+      if (!apiError && liveData && Array.isArray(liveData)) {
+        console.log(`Successfully fetched ${liveData.length} live matches for ${sportType}`);
+        setMarkets(liveData);
+        return liveData;
+      } else {
+        console.warn('OddsAPI failed, falling back to simulated data:', apiError);
+      }
+      
+      // Fallback to simulated data if API fails
       const data = simulatedMarkets[sportType] || [];
       
       // Add slight random variations to prices to simulate live updates
@@ -121,10 +139,10 @@ export function useMarketData(sport: string = 'football') {
   useEffect(() => {
     fetchMarketData(sport);
     
-    // Set up refresh interval (every 3 hours in real app, every 5 minutes for demo)
+    // Set up refresh interval (every 60 seconds for live odds)
     const intervalId = setInterval(() => {
       fetchMarketData(sport);
-    }, 5 * 60 * 1000);
+    }, 60 * 1000);
     
     return () => clearInterval(intervalId);
   }, [sport]);

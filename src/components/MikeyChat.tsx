@@ -15,7 +15,7 @@ interface Message {
   content: string;
   isBot: boolean;
   timestamp: Date;
-  type?: 'text' | 'bet_slip' | 'odds_card' | 'deposit_form';
+  type?: 'text' | 'bet_slip' | 'odds_card' | 'deposit_form' | 'payout_form';
   data?: any;
 }
 
@@ -44,9 +44,10 @@ interface MikeyChatProps {
   userBalance: number;
   onDepositRequest: () => void;
   onBetPlaced: (bet: any) => void;
+  onPayoutRequest?: (payout: { amount: number; walletAddress: string; method: string }) => void;
 }
 
-export default function MikeyChat({ userBalance, onDepositRequest, onBetPlaced }: MikeyChatProps) {
+export default function MikeyChat({ userBalance, onDepositRequest, onBetPlaced, onPayoutRequest }: MikeyChatProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -162,6 +163,15 @@ export default function MikeyChat({ userBalance, onDepositRequest, onBetPlaced }
             <CreditCard className="h-4 w-4 mr-2" />
             Deposit Now
           </Button>
+        </div>
+      );
+    }
+
+    if (message.type === 'payout_form') {
+      return (
+        <div className="space-y-3">
+          <p>{message.content}</p>
+          <PayoutFormCard data={message.data} onSubmit={onPayoutRequest} />
         </div>
       );
     }
@@ -300,6 +310,131 @@ function BetSlipCard({ data, onConfirm }: { data: BetSlipData; onConfirm: (bet: 
           disabled={stake <= 0}
         >
           Place Bet
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
+// Payout Form Component
+function PayoutFormCard({ data, onSubmit }: { 
+  data: { maxAmount: number }; 
+  onSubmit?: (payout: { amount: number; walletAddress: string; method: string }) => void;
+}) {
+  const [amount, setAmount] = useState('');
+  const [walletAddress, setWalletAddress] = useState('');
+  const [method, setMethod] = useState('USDT');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleSubmit = async () => {
+    if (!amount || !walletAddress || parseFloat(amount) < 100) {
+      toast({
+        title: "Invalid Input",
+        description: "Please enter a valid amount (minimum ৳100) and wallet address",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (parseFloat(amount) > data.maxAmount) {
+      toast({
+        title: "Insufficient Balance",
+        description: `Amount exceeds your balance of ৳${data.maxAmount}`,
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        throw new Error('User not authenticated');
+      }
+
+      // Create withdrawal request
+      const { error } = await supabase
+        .from('withdrawal_requests')
+        .insert({
+          user_id: user.id,
+          amount: parseFloat(amount),
+          wallet_address: walletAddress,
+          method: method,
+          status: 'pending'
+        });
+
+      if (error) throw error;
+
+      toast({
+        title: "Payout Request Submitted",
+        description: "Your withdrawal request has been submitted for admin approval",
+      });
+
+      if (onSubmit) {
+        onSubmit({ 
+          amount: parseFloat(amount), 
+          walletAddress, 
+          method 
+        });
+      }
+    } catch (error) {
+      console.error('Error submitting payout request:', error);
+      toast({
+        title: "Error",
+        description: "Failed to submit payout request. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <Card className="border-primary/20">
+      <CardContent className="p-4 space-y-4">
+        <div className="space-y-2">
+          <label className="text-sm font-medium">Amount (৳)</label>
+          <Input
+            type="number"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            placeholder={`Min: 100, Max: ${data.maxAmount}`}
+            min="100"
+            max={data.maxAmount}
+          />
+        </div>
+        
+        <div className="space-y-2">
+          <label className="text-sm font-medium">Wallet Address</label>
+          <Input
+            value={walletAddress}
+            onChange={(e) => setWalletAddress(e.target.value)}
+            placeholder="Enter your USDT/crypto wallet address"
+          />
+        </div>
+        
+        <div className="space-y-2">
+          <label className="text-sm font-medium">Method</label>
+          <select 
+            value={method} 
+            onChange={(e) => setMethod(e.target.value)}
+            className="w-full p-2 border rounded-md"
+          >
+            <option value="USDT">USDT</option>
+            <option value="Binance">Binance</option>
+            <option value="Coinbase">Coinbase</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+
+        <Button 
+          onClick={handleSubmit} 
+          disabled={isSubmitting || !amount || !walletAddress}
+          className="w-full"
+        >
+          <Wallet className="h-4 w-4 mr-2" />
+          {isSubmitting ? 'Submitting...' : 'Request Payout'}
         </Button>
       </CardContent>
     </Card>

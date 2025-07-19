@@ -9,12 +9,13 @@ import AdminSpreadAdjustment from '@/components/AdminSpreadAdjustment';
 import AdminNotificationsSettings from '@/components/AdminNotificationsSettings';
 import AdminMarketManager from '@/components/AdminMarketManager';
 import HistoricalExposure from '@/components/HistoricalExposure';
+import WithdrawalApproval from '@/components/WithdrawalApproval';
 import Header from '@/components/Header';
 import LiveBettingChat from '@/components/LiveBettingChat';
 import { SpreadsProvider } from '@/contexts/SpreadsContext';
 import { NotificationProvider } from '@/contexts/NotificationContext';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { AlertTriangle, BarChart3, Bell, History, PanelLeft, Wallet, Trophy } from "lucide-react";
+import { AlertTriangle, BarChart3, Bell, History, PanelLeft, Wallet, Trophy, DollarSign } from "lucide-react";
 
 const Admin = () => {
   const [walletBalance] = useState<number>(10000);
@@ -62,7 +63,7 @@ const Admin = () => {
             <h1 className="text-2xl font-bold mb-6">Admin Dashboard</h1>
             
             <Tabs defaultValue="dashboard">
-              <TabsList className="mb-6 grid w-full grid-cols-7">
+              <TabsList className="mb-6 grid w-full grid-cols-8">
                 <TabsTrigger value="dashboard">
                   <BarChart3 className="h-4 w-4 mr-2" />
                   Analytics
@@ -82,6 +83,10 @@ const Admin = () => {
                 <TabsTrigger value="spreads">
                   <PanelLeft className="h-4 w-4 mr-2" />
                   Spreads
+                </TabsTrigger>
+                <TabsTrigger value="payouts">
+                  <DollarSign className="h-4 w-4 mr-2" />
+                  Payouts
                 </TabsTrigger>
                 <TabsTrigger value="history">
                   <History className="h-4 w-4 mr-2" />
@@ -117,6 +122,10 @@ const Admin = () => {
                   <AdminSpreads />
                   <AdminSpreadAdjustment />
                 </div>
+              </TabsContent>
+              
+              <TabsContent value="payouts">
+                <WithdrawalApproval />
               </TabsContent>
               
               <TabsContent value="history">

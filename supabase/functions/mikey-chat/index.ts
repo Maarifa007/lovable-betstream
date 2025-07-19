@@ -31,6 +31,9 @@ serve(async (req) => {
       response = await handleAdminQuery(message, language);
     } else {
       switch (intent) {
+        case 'payout':
+          response = await handlePayoutQuery(message, language, userBalance);
+          break;
         case 'deposit':
           response = handleDepositQuery(message, language, userBalance);
           break;
@@ -68,6 +71,9 @@ serve(async (req) => {
 });
 
 function detectIntent(message: string): string {
+  if (message.includes('payout') || message.includes('withdraw') || message.includes('cash out') || message.includes('withdraw money') || message.includes('টাকা তুলতে')) {
+    return 'payout';
+  }
   if (message.includes('deposit') || message.includes('add money') || message.includes('fund')) {
     return 'deposit';
   }
@@ -184,11 +190,36 @@ async function handleBetQuery(message: string, language: string) {
   return await handleOddsQuery(message, language);
 }
 
+async function handlePayoutQuery(message: string, language: string, userBalance: number) {
+  if (userBalance < 100) {
+    const messages = {
+      en: "Minimum withdrawal amount is ৳100. Your current balance is ৳" + userBalance + ". Please deposit more or win more bets to reach the minimum.",
+      bn: "সর্বনিম্ন উত্তোলনের পরিমাণ ৳১০০। আপনার বর্তমান ব্যালেন্স ৳" + userBalance + "। সর্বনিম্ন পরিমাণ পৌঁছাতে আরো জমা দিন বা আরো বেট জিতুন।"
+    };
+    
+    return {
+      message: messages[language as keyof typeof messages] || messages.en,
+      type: 'text'
+    };
+  }
+
+  const messages = {
+    en: `Great! You can withdraw up to ৳${userBalance.toLocaleString()}. Please provide your withdrawal details:\n\n• Amount (minimum ৳100)\n• Wallet address (USDT/Crypto)\n• Preferred method (Binance, Coinbase, etc.)\n\nI'll submit your request for admin approval.`,
+    bn: `চমৎকার! আপনি ৳${userBalance.toLocaleString()} পর্যন্ত উত্তোলন করতে পারেন। অনুগ্রহ করে আপনার উত্তোলনের বিবরণ দিন:\n\n• পরিমাণ (সর্বনিম্ন ৳১০০)\n• ওয়ালেট ঠিকানা (USDT/ক্রিপ্টো)\n• পছন্দের পদ্ধতি (Binance, Coinbase, ইত্যাদি)\n\nআমি অ্যাডমিন অনুমোদনের জন্য আপনার অনুরোধ জমা দেব।`
+  };
+  
+  return {
+    message: messages[language as keyof typeof messages] || messages.en,
+    type: 'payout_form',
+    data: { maxAmount: userBalance }
+  };
+}
+
 async function handleAdminQuery(message: string, language: string) {
   // Simple admin responses - in production, you'd verify admin status
   const messages = {
-    en: "Admin mode detected. You can:\n• Create new contests\n• Update odds\n• Manage user accounts\n• Grade completed matches\n\nWhat would you like to do?",
-    bn: "অ্যাডমিন মোড শনাক্ত করা হয়েছে। আপনি পারেন:\n• নতুন প্রতিযোগিতা তৈরি করতে\n• অডস আপডেট করতে\n• ব্যবহারকারীর অ্যাকাউন্ট পরিচালনা করতে\n• সম্পূর্ণ ম্যাচের গ্রেড করতে\n\nআপনি কী করতে চান?"
+    en: "Admin mode detected. You can:\n• Create new contests\n• Update odds\n• Manage user accounts\n• Grade completed matches\n• Approve withdrawal requests\n\nWhat would you like to do?",
+    bn: "অ্যাডমিন মোড শনাক্ত করা হয়েছে। আপনি পারেন:\n• নতুন প্রতিযোগিতা তৈরি করতে\n• অডস আপডেট করতে\n• ব্যবহারকারীর অ্যাকাউন্ট পরিচালনা করতে\n• সম্পূর্ণ ম্যাচের গ্রেড করতে\n• উত্তোলনের অনুরোধ অনুমোদন করতে\n\nআপনি কী করতে চান?"
   };
   
   return {
